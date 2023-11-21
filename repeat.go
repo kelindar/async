@@ -5,20 +5,14 @@ package async
 
 import (
 	"context"
-	"log"
-	"runtime/debug"
 	"time"
 )
 
 // Repeat performs an action asynchronously on a predetermined interval.
 func Repeat(ctx context.Context, interval time.Duration, action Work) Task {
-	safeAction := func(ctx context.Context) (interface{}, error) {
-		defer handlePanic()
-		return action(ctx)
-	}
 
 	// Invoke the task timer
-	return Invoke(ctx, func(taskCtx context.Context) (interface{}, error) {
+	return Invoke(ctx, func(taskCtx context.Context) (any, error) {
 		timer := time.NewTicker(interval)
 		for {
 			select {
@@ -27,15 +21,8 @@ func Repeat(ctx context.Context, interval time.Duration, action Work) Task {
 				return nil, nil
 
 			case <-timer.C:
-				_, _ = safeAction(taskCtx)
+				_, _ = action(taskCtx)
 			}
 		}
 	})
-}
-
-// handlePanic handles the panic and logs it out.
-func handlePanic() {
-	if r := recover(); r != nil {
-		log.Printf("panic recovered: %ss \n %s", r, debug.Stack())
-	}
 }

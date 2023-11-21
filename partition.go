@@ -18,20 +18,20 @@ type partitioner struct {
 
 const defaultCapacity = 1 << 14
 
-type partitionedItems map[string][]interface{}
+type partitionedItems map[string][]any
 
 // Partitioner partitions events
 type Partitioner interface {
 	// Append items to the queue which is pending partition
-	Append(items interface{}) Task
+	Append(items any) Task
 
 	// Partition items and output the result
-	Partition() map[string][]interface{}
+	Partition() map[string][]any
 }
 
 // PartitionFunc takes in data and outputs key
 // if ok is false, the data doesn't fall into and partition
-type PartitionFunc func(data interface{}) (key string, ok bool)
+type PartitionFunc func(data any) (key string, ok bool)
 
 // NewPartitioner creates a new partitioner
 func NewPartitioner(ctx context.Context, partition PartitionFunc) Partitioner {
@@ -43,15 +43,15 @@ func NewPartitioner(ctx context.Context, partition PartitionFunc) Partitioner {
 }
 
 // Append adds a batch of events to the buffer
-func (p *partitioner) Append(items interface{}) Task {
-	return Invoke(p.ctx, func(context.Context) (interface{}, error) {
+func (p *partitioner) Append(items any) Task {
+	return Invoke(p.ctx, func(context.Context) (any, error) {
 		p.queue.Append(p.transform(items))
 		return nil, nil
 	})
 }
 
 // transform creates a map of scope to event
-func (p *partitioner) transform(items interface{}) partitionedItems {
+func (p *partitioner) transform(items any) partitionedItems {
 	t := reflect.TypeOf(items)
 	if t.Kind() != reflect.Slice {
 		panic("transform requires for slice")
@@ -69,7 +69,7 @@ func (p *partitioner) transform(items interface{}) partitionedItems {
 }
 
 // Partition flushes the list of events and clears up the buffer
-func (p *partitioner) Partition() map[string][]interface{} {
+func (p *partitioner) Partition() map[string][]any {
 	out := partitionedItems{}
 	for _, pMap := range p.queue.Flush() {
 		for k, v := range pMap {

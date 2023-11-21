@@ -7,7 +7,7 @@ import "context"
 
 // ForkJoin executes input task in parallel and waits for ALL outcomes before returning.
 func ForkJoin(ctx context.Context, tasks []Task) Task {
-	return Invoke(ctx, func(context.Context) (interface{}, error) {
+	return Invoke(ctx, func(context.Context) (any, error) {
 		for _, task := range tasks {
 			_ = task.Run(ctx)
 		}

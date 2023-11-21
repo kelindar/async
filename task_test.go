@@ -5,6 +5,7 @@ package async
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestNewTasks(t *testing.T) {
-	work := func(context.Context) (interface{}, error) {
+	work := func(context.Context) (any, error) {
 		return 1, nil
 	}
 
@@ -22,7 +23,7 @@ func TestNewTasks(t *testing.T) {
 }
 
 func TestOutcome(t *testing.T) {
-	task := Invoke(context.Background(), func(context.Context) (interface{}, error) {
+	task := Invoke(context.Background(), func(context.Context) (any, error) {
 		return 1, nil
 	})
 
@@ -42,7 +43,7 @@ func TestOutcomeTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	task := Invoke(ctx, func(context.Context) (interface{}, error) {
+	task := Invoke(ctx, func(context.Context) (any, error) {
 		time.Sleep(500 * time.Millisecond)
 		return 1, nil
 	})
@@ -52,16 +53,16 @@ func TestOutcomeTimeout(t *testing.T) {
 }
 
 func TestContinueWithChain(t *testing.T) {
-	task1 := Invoke(context.Background(), func(context.Context) (interface{}, error) {
+	task1 := Invoke(context.Background(), func(context.Context) (any, error) {
 		return 1, nil
 	})
 
 	ctx := context.TODO()
-	task2 := task1.ContinueWith(ctx, func(result interface{}, _ error) (interface{}, error) {
+	task2 := task1.ContinueWith(ctx, func(result any, _ error) (any, error) {
 		return result.(int) + 1, nil
 	})
 
-	task3 := task2.ContinueWith(ctx, func(result interface{}, _ error) (interface{}, error) {
+	task3 := task2.ContinueWith(ctx, func(result any, _ error) (any, error) {
 		return result.(int) + 1, nil
 	})
 
@@ -74,11 +75,11 @@ func TestContinueTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	first := Invoke(ctx, func(context.Context) (interface{}, error) {
+	first := Invoke(ctx, func(context.Context) (any, error) {
 		return 5, nil
 	})
 
-	second := first.ContinueWith(ctx, func(result interface{}, err error) (interface{}, error) {
+	second := first.ContinueWith(ctx, func(result any, err error) (any, error) {
 		time.Sleep(500 * time.Millisecond)
 		return result, err
 	})
@@ -92,7 +93,7 @@ func TestContinueTimeout(t *testing.T) {
 }
 
 func TestTaskCancelStarted(t *testing.T) {
-	task := Invoke(context.Background(), func(context.Context) (interface{}, error) {
+	task := Invoke(context.Background(), func(context.Context) (any, error) {
 		time.Sleep(500 * time.Millisecond)
 		return 1, nil
 	})
@@ -104,7 +105,7 @@ func TestTaskCancelStarted(t *testing.T) {
 }
 
 func TestTaskCancelRunning(t *testing.T) {
-	task := Invoke(context.Background(), func(context.Context) (interface{}, error) {
+	task := Invoke(context.Background(), func(context.Context) (any, error) {
 		time.Sleep(500 * time.Millisecond)
 		return 1, nil
 	})
@@ -118,7 +119,7 @@ func TestTaskCancelRunning(t *testing.T) {
 }
 
 func TestTaskCancelTwice(t *testing.T) {
-	task := Invoke(context.Background(), func(context.Context) (interface{}, error) {
+	task := Invoke(context.Background(), func(context.Context) (any, error) {
 		time.Sleep(500 * time.Millisecond)
 		return 1, nil
 	})
@@ -139,4 +140,15 @@ func TestCompleted(t *testing.T) {
 	v, err := task.Outcome()
 	assert.Nil(t, err)
 	assert.Nil(t, v)
+}
+
+func TestPanic(t *testing.T) {
+	assert.NotPanics(t, func() {
+		_, err := Invoke(context.Background(), func(context.Context) (any, error) {
+			panic("test")
+		}).Outcome()
+
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ErrPanic))
+	})
 }

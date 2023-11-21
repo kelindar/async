@@ -11,12 +11,12 @@ func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
 		return ForkJoin(ctx, tasks)
 	}
 
-	return Invoke(ctx, func(context.Context) (interface{}, error) {
+	return Invoke(ctx, func(context.Context) (any, error) {
 		sem := make(chan struct{}, concurrency)
 		for _, task := range tasks {
 			sem <- struct{}{}
 			task.Run(ctx).ContinueWith(ctx,
-				func(interface{}, error) (interface{}, error) {
+				func(any, error) (any, error) {
 					<-sem
 					return nil, nil
 				})

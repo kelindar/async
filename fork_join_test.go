@@ -13,13 +13,13 @@ import (
 )
 
 func TestForkJoin(t *testing.T) {
-	first := NewTask(func(context.Context) (interface{}, error) {
+	first := NewTask(func(context.Context) (any, error) {
 		return 1, nil
 	})
-	second := NewTask(func(context.Context) (interface{}, error) {
+	second := NewTask(func(context.Context) (any, error) {
 		return nil, errors.New("some error")
 	})
-	third := NewTask(func(context.Context) (interface{}, error) {
+	third := NewTask(func(context.Context) (any, error) {
 		return 3, nil
 	})
 
@@ -39,11 +39,11 @@ func TestForkJoin(t *testing.T) {
 }
 
 func ExampleForkJoin() {
-	first := NewTask(func(context.Context) (interface{}, error) {
+	first := NewTask(func(context.Context) (any, error) {
 		return 1, nil
 	})
 
-	second := NewTask(func(context.Context) (interface{}, error) {
+	second := NewTask(func(context.Context) (any, error) {
 		return nil, errors.New("some error")
 	})
 

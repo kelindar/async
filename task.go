@@ -7,16 +7,21 @@ package async
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 )
 
-var errCancelled = errors.New("context canceled")
+var (
+	errCancelled = errors.New("context canceled")
+	ErrPanic     = errors.New("panic in async task")
+)
 
 var now = time.Now
 
 // Work represents a handler to execute
-type Work func(context.Context) (interface{}, error)
+type Work func(context.Context) (any, error)
 
 // State represents the state enumeration for a task.
 type State byte
@@ -33,8 +38,8 @@ type signal chan struct{}
 
 // Outcome of the task contains a result and an error
 type outcome struct {
-	result interface{} // The result of the work
-	err    error       // The error
+	result any   // The result of the work
+	err    error // The error
 }
 
 // Task represents a unit of work to be done
@@ -52,8 +57,8 @@ type Task interface {
 	Run(ctx context.Context) Task
 	Cancel()
 	State() State
-	Outcome() (interface{}, error)
-	ContinueWith(ctx context.Context, nextAction func(interface{}, error) (interface{}, error)) Task
+	Outcome() (any, error)
+	ContinueWith(ctx context.Context, nextAction func(any, error) (any, error)) Task
 	Duration() time.Duration
 }
 
@@ -81,7 +86,7 @@ func Invoke(ctx context.Context, action Work) Task {
 }
 
 // Outcome waits until the task is done and returns the final result and error.
-func (t *task) Outcome() (interface{}, error) {
+func (t *task) Outcome() (any, error) {
 	<-t.done
 	return t.outcome.result, t.outcome.err
 }
@@ -138,6 +143,14 @@ func (t *task) run(ctx context.Context) {
 	startedAt := now().UnixNano()
 	outcomeCh := make(chan outcome, 1)
 	go func() {
+		defer func() {
+			if out := recover(); out != nil {
+				outcomeCh <- outcome{err: fmt.Errorf("%w: %s\n%s",
+					ErrPanic, out, debug.Stack())}
+				return
+			}
+		}()
+
 		r, e := t.action(ctx)
 		outcomeCh <- outcome{result: r, err: e}
 	}()
@@ -170,8 +183,8 @@ func (t *task) run(ctx context.Context) {
 }
 
 // ContinueWith proceeds with the next task once the current one is finished.
-func (t *task) ContinueWith(ctx context.Context, nextAction func(interface{}, error) (interface{}, error)) Task {
-	return Invoke(ctx, func(context.Context) (interface{}, error) {
+func (t *task) ContinueWith(ctx context.Context, nextAction func(any, error) (any, error)) Task {
+	return Invoke(ctx, func(context.Context) (any, error) {
 		result, err := t.Outcome()
 		return nextAction(result, err)
 	})
