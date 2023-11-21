@@ -13,7 +13,7 @@ import (
 )
 
 func TestPartitioner(t *testing.T) {
-	partitionFunc := func(data interface{}) (string, bool) {
+	partitionFunc := func(data any) (string, bool) {
 		xevent, ok := data.(map[string]string)
 		if !ok {
 			return "", false
@@ -23,19 +23,19 @@ func TestPartitioner(t *testing.T) {
 	}
 	p := NewPartitioner(context.Background(), partitionFunc)
 
-	input1 := []interface{}{
+	input1 := []any{
 		map[string]string{"pre": "a", "val": "val1"},
 		map[string]string{"pre": "b", "val": "val2"},
 		map[string]string{"pre": "a", "val": "val4"},
 		map[string]string{"pre": "c", "val": "val5"},
 	}
 
-	input2 := []interface{}{
+	input2 := []any{
 		map[string]string{"pre": "a", "val": "val3"},
 		map[string]string{"pre": "c", "val": "val4"},
 	}
 
-	expectedRes1 := map[string][]interface{}{
+	expectedRes1 := map[string][]any{
 		"a": {
 			map[string]string{"pre": "a", "val": "val1"},
 			map[string]string{"pre": "a", "val": "val4"},
@@ -50,7 +50,7 @@ func TestPartitioner(t *testing.T) {
 		},
 	}
 
-	expectedRes2 := map[string][]interface{}{
+	expectedRes2 := map[string][]any{
 		"a": {
 			map[string]string{"pre": "a", "val": "val3"},
 			map[string]string{"pre": "a", "val": "val1"},
@@ -75,7 +75,7 @@ func TestPartitioner(t *testing.T) {
 }
 
 func ExamplePartitioner() {
-	partitionFunc := func(data interface{}) (string, bool) {
+	partitionFunc := func(data any) (string, bool) {
 		xevent, ok := data.(map[string]string)
 		if !ok {
 			return "", false
@@ -85,7 +85,7 @@ func ExamplePartitioner() {
 	}
 	p := NewPartitioner(context.Background(), partitionFunc)
 
-	input := []interface{}{
+	input := []any{
 		map[string]string{"pre": "a", "val": "val1"},
 		map[string]string{"pre": "b", "val": "val2"},
 		map[string]string{"pre": "a", "val": "val4"},
@@ -107,22 +107,22 @@ func ExamplePartitioner() {
 func TestQueue(t *testing.T) {
 	q := newQueue()
 	input1 := partitionedItems{
-		"a": []interface{}{"val1"},
-		"b": []interface{}{"val2"},
+		"a": []any{"val1"},
+		"b": []any{"val2"},
 	}
 
 	input2 := partitionedItems{
-		"a": []interface{}{"val4"},
-		"c": []interface{}{"val5"},
+		"a": []any{"val4"},
+		"c": []any{"val5"},
 	}
 
 	expectedRes := []partitionedItems{
 		{
-			"a": []interface{}{"val1"},
-			"b": []interface{}{"val2"},
+			"a": []any{"val1"},
+			"b": []any{"val2"},
 		}, {
-			"a": []interface{}{"val4"},
-			"c": []interface{}{"val5"},
+			"a": []any{"val4"},
+			"c": []any{"val5"},
 		},
 	}
 

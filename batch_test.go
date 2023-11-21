@@ -18,8 +18,8 @@ func TestBatch(t *testing.T) {
 	wg.Add(taskCount)
 
 	// reducer that multiplies items by 10 at once
-	r := NewBatch(context.Background(), func(input []interface{}) []interface{} {
-		result := make([]interface{}, len(input))
+	r := NewBatch(context.Background(), func(input []any) []any {
+		result := make([]any, len(input))
 		for i, number := range input {
 			result[i] = number.(int) * 10
 		}
@@ -28,7 +28,7 @@ func TestBatch(t *testing.T) {
 
 	for i := 0; i < taskCount; i++ {
 		number := i
-		r.Append(number).ContinueWith(context.TODO(), func(result interface{}, err error) (interface{}, error) {
+		r.Append(number).ContinueWith(context.TODO(), func(result any, err error) (any, error) {
 			assert.Equal(t, result.(int), number*10)
 			assert.NoError(t, err)
 			wg.Done()
@@ -46,16 +46,16 @@ func ExampleBatch() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	r := NewBatch(context.Background(), func(input []interface{}) []interface{} {
+	r := NewBatch(context.Background(), func(input []any) []any {
 		fmt.Println(input)
 		return input
 	})
 
-	r.Append(1).ContinueWith(context.TODO(), func(result interface{}, err error) (interface{}, error) {
+	r.Append(1).ContinueWith(context.TODO(), func(result any, err error) (any, error) {
 		wg.Done()
 		return nil, nil
 	})
-	r.Append(2).ContinueWith(context.TODO(), func(result interface{}, err error) (interface{}, error) {
+	r.Append(2).ContinueWith(context.TODO(), func(result any, err error) (any, error) {
 		wg.Done()
 		return nil, nil
 	})

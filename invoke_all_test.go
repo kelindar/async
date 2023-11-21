@@ -17,7 +17,7 @@ func TestInvokeAll(t *testing.T) {
 	works := make([]Work, 6, 6)
 	for i := range works {
 		j := i
-		works[j] = func(context.Context) (interface{}, error) {
+		works[j] = func(context.Context) (any, error) {
 			resChan <- j / 2
 			time.Sleep(time.Millisecond * 10)
 			return nil, nil
@@ -39,7 +39,7 @@ func TestInvokeAllWithZeroConcurrency(t *testing.T) {
 	works := make([]Work, 6, 6)
 	for i := range works {
 		j := i
-		works[j] = func(context.Context) (interface{}, error) {
+		works[j] = func(context.Context) (any, error) {
 			resChan <- 1
 			time.Sleep(time.Millisecond * 10)
 			return nil, nil
@@ -61,7 +61,7 @@ func ExampleInvokeAll() {
 	works := make([]Work, 6, 6)
 	for i := range works {
 		j := i
-		works[j] = func(context.Context) (interface{}, error) {
+		works[j] = func(context.Context) (any, error) {
 			fmt.Println(j / 2)
 			time.Sleep(time.Millisecond * 10)
 			return nil, nil

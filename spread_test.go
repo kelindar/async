@@ -13,7 +13,7 @@ import (
 )
 
 func newTasks() []Task {
-	work := func(context.Context) (interface{}, error) {
+	work := func(context.Context) (any, error) {
 		return 1, nil
 	}
 

@@ -15,7 +15,7 @@ import (
 func TestRepeat(t *testing.T) {
 	assert.NotPanics(t, func() {
 		out := make(chan bool, 1)
-		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (interface{}, error) {
+		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (any, error) {
 			out <- true
 			return nil, nil
 		})
@@ -29,7 +29,7 @@ func TestRepeat(t *testing.T) {
 
 func ExampleRepeat() {
 	out := make(chan bool, 1)
-	task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (interface{}, error) {
+	task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (any, error) {
 		out <- true
 		return nil, nil
 	})
@@ -46,7 +46,7 @@ func ExampleRepeat() {
 /*
 func TestRepeatFirstActionPanic(t *testing.T) {
 	assert.NotPanics(t, func() {
-		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (interface{}, error) {
+		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (any, error) {
 			panic("test")
 		})
 
@@ -57,7 +57,7 @@ func TestRepeatFirstActionPanic(t *testing.T) {
 func TestRepeatPanic(t *testing.T) {
 	assert.NotPanics(t, func() {
 		var counter int32
-		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (interface{}, error) {
+		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (any, error) {
 			atomic.AddInt32(&counter, 1)
 			panic("test")
 		})

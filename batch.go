@@ -12,29 +12,29 @@ import (
 
 type batchEntry struct {
 	id      uint64
-	payload interface{} // Will be used as input when the batch is processed
-	task    Task        // The callback will be called when this entry is processed
+	payload any  // Will be used as input when the batch is processed
+	task    Task // The callback will be called when this entry is processed
 }
 
 type batch struct {
 	sync.RWMutex
 	ctx       context.Context
-	lastID    uint64                            // The last id for result matching
-	pending   []batchEntry                      // The pending entries to the batch
-	batchTask Task                              // The current batch task
-	batch     chan []batchEntry                 // The current batch channel to execute
-	process   func([]interface{}) []interface{} // The function which will be executed to process the items of the NewBatch
+	lastID    uint64            // The last id for result matching
+	pending   []batchEntry      // The pending entries to the batch
+	batchTask Task              // The current batch task
+	batch     chan []batchEntry // The current batch channel to execute
+	process   func([]any) []any // The function which will be executed to process the items of the NewBatch
 }
 
 // Batch represents a batch where one can append to the batch and process it as a whole.
 type Batch interface {
-	Append(payload interface{}) Task
+	Append(payload any) Task
 	Size() int
 	Reduce()
 }
 
 // NewBatch creates a new batch
-func NewBatch(ctx context.Context, process func([]interface{}) []interface{}) Batch {
+func NewBatch(ctx context.Context, process func([]any) []any) Batch {
 	return &batch{
 		ctx:     ctx,
 		pending: []batchEntry{},
@@ -45,7 +45,7 @@ func NewBatch(ctx context.Context, process func([]interface{}) []interface{}) Ba
 
 // Append adds a new payload to the batch and returns the task for that particular
 // payload. You should listen for the outcome, as the task will be executed by the reducer.
-func (b *batch) Append(payload interface{}) Task {
+func (b *batch) Append(payload any) Task {
 	b.Lock()
 	defer b.Unlock()
 
@@ -58,8 +58,8 @@ func (b *batch) Append(payload interface{}) Task {
 	}
 
 	// Batch task will need to continue with this one
-	t := b.batchTask.ContinueWith(b.ctx, func(batchResult interface{}, _ error) (interface{}, error) {
-		if res, ok := batchResult.(map[uint64]interface{}); ok {
+	t := b.batchTask.ContinueWith(b.ctx, func(batchResult any, _ error) (any, error) {
+		if res, ok := batchResult.(map[uint64]any); ok {
 			return res[id], nil
 		}
 
@@ -107,13 +107,13 @@ func (b *batch) Size() int {
 
 // createBatchTask creates a task for the batch. Triggering this task will trigger the whole batch.
 func (b *batch) createBatchTask() Task {
-	return Invoke(b.ctx, func(context.Context) (interface{}, error) {
+	return Invoke(b.ctx, func(context.Context) (any, error) {
 		// block here until a batch is ordered to be processed
 		batch := <-b.batch
-		m := map[uint64]interface{}{}
+		m := map[uint64]any{}
 
 		// prepare the input for the batch reduce call
-		input := make([]interface{}, len(batch))
+		input := make([]any, len(batch))
 		for i, b := range batch {
 			input[i] = b.payload
 		}

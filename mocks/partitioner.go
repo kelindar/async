@@ -15,11 +15,11 @@ type Partitioner struct {
 }
 
 // Append provides a mock function with given fields: items
-func (_m *Partitioner) Append(items interface{}) async.Task {
+func (_m *Partitioner) Append(items any) async.Task {
 	ret := _m.Called(items)
 
 	var r0 async.Task
-	if rf, ok := ret.Get(0).(func(interface{}) async.Task); ok {
+	if rf, ok := ret.Get(0).(func(any) async.Task); ok {
 		r0 = rf(items)
 	} else {
 		if ret.Get(0) != nil {
@@ -31,15 +31,15 @@ func (_m *Partitioner) Append(items interface{}) async.Task {
 }
 
 // Partition provides a mock function with given fields:
-func (_m *Partitioner) Partition() map[string][]interface{} {
+func (_m *Partitioner) Partition() map[string][]any {
 	ret := _m.Called()
 
-	var r0 map[string][]interface{}
-	if rf, ok := ret.Get(0).(func() map[string][]interface{}); ok {
+	var r0 map[string][]any
+	if rf, ok := ret.Get(0).(func() map[string][]any); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string][]interface{})
+			r0 = ret.Get(0).(map[string][]any)
 		}
 	}
 

@@ -46,7 +46,7 @@ func TestProcessTaskPool_HappyPath(t *testing.T) {
 
 		go func() {
 			for i := 0; i < m.taskCount; i++ {
-				taskChan <- NewTask(func(context.Context) (interface{}, error) {
+				taskChan <- NewTask(func(context.Context) (any, error) {
 					resChan <- struct{}{}
 					time.Sleep(time.Millisecond * 10)
 					return nil, nil
@@ -95,7 +95,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 		ctx, _ := context.WithTimeout(context.Background(), m.timeOut*time.Millisecond)
 		go func() {
 			for i := 0; i < m.taskCount; i++ {
-				taskChan <- NewTask(func(context.Context) (interface{}, error) {
+				taskChan <- NewTask(func(context.Context) (any, error) {
 					time.Sleep(time.Millisecond * 10)
 					return nil, nil
 				})

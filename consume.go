@@ -14,7 +14,7 @@ func Consume(ctx context.Context, concurrency int, tasks chan Task) Task {
 		concurrency = runtime.NumCPU()
 	}
 
-	return Invoke(ctx, func(taskCtx context.Context) (interface{}, error) {
+	return Invoke(ctx, func(taskCtx context.Context) (any, error) {
 		workers := make(chan int, concurrency)
 		concurrentTasks := make([]Task, concurrency)
 		// generate worker IDs
@@ -45,7 +45,7 @@ func Consume(ctx context.Context, concurrency int, tasks chan Task) Task {
 					}
 					concurrentTasks[workerID] = t
 					t.Run(taskCtx).ContinueWith(taskCtx,
-						func(interface{}, error) (interface{}, error) {
+						func(any, error) (any, error) {
 							workers <- workerID
 							return nil, nil
 						})
