@@ -73,7 +73,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 		desc        string
 		taskCount   int
 		concurrency int
-		timeOut     time.Duration //in millisecond
+		timeOut     time.Duration // in millisecond
 	}{
 		{
 			desc:        "2 workers cannot finish 10 tasks in 20 ms where 1 task takes 10 ms. Context cancelled while waiting for available worker",
@@ -92,7 +92,9 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 	for _, test := range tests {
 		m := test
 		taskChan := make(chan Task)
-		ctx, _ := context.WithTimeout(context.Background(), m.timeOut*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), m.timeOut*time.Millisecond)
+		defer cancel()
+
 		go func() {
 			for i := 0; i < m.taskCount; i++ {
 				taskChan <- NewTask(func(context.Context) (any, error) {

@@ -29,7 +29,7 @@ func TestThrottle(t *testing.T) {
 	_, _ = task.Outcome() // Wait
 
 	// Make sure we completed within duration
-	dt := int(time.Now().Sub(t0).Seconds() * 1000)
+	dt := int(time.Since(t0).Seconds() * 1000)
 	assert.True(t, dt > 50 && dt < 100, fmt.Sprintf("%v ms.", dt))
 }
 
@@ -62,7 +62,7 @@ func TestSpread(t *testing.T) {
 	_, _ = task.Outcome() // Wait
 
 	// Make sure we completed within duration
-	dt := int(time.Now().Sub(t0).Seconds() * 1000)
+	dt := int(time.Since(t0).Seconds() * 1000)
 	assert.True(t, dt > 150 && dt < 250, fmt.Sprintf("%v ms.", dt))
 
 	// Make sure all tasks are done
@@ -92,5 +92,4 @@ func ExampleSpread() {
 	// 1
 	// 1
 	// 1
-
 }
