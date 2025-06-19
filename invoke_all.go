@@ -8,7 +8,7 @@ import "context"
 // InvokeAll runs the tasks with a specific max concurrency
 func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
 	if concurrency == 0 {
-		return ForkJoin(ctx, tasks)
+		return forkJoin(ctx, tasks)
 	}
 
 	return Invoke(ctx, func(context.Context) (any, error) {
@@ -24,4 +24,31 @@ func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
 		WaitAll(tasks)
 		return nil, nil
 	})
+}
+
+// forkJoin executes input task in parallel and waits for ALL outcomes before returning.
+func forkJoin(ctx context.Context, tasks []Task) Task {
+	return Invoke(ctx, func(context.Context) (any, error) {
+		for _, task := range tasks {
+			_ = task.Run(ctx)
+		}
+		WaitAll(tasks)
+		return nil, nil
+	})
+}
+
+// WaitAll waits for all tasks to finish.
+func WaitAll(tasks []Task) {
+	for _, task := range tasks {
+		if task != nil {
+			_, _ = task.Outcome()
+		}
+	}
+}
+
+// CancelAll cancels all specified tasks.
+func CancelAll(tasks []Task) {
+	for _, task := range tasks {
+		task.Cancel()
+	}
 }
