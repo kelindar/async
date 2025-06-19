@@ -12,11 +12,11 @@ BenchmarkTask/Consume-24         	    1125	    974459 ns/op	 1122649 B/op	   160
 BenchmarkTask/Invoke-24          	 1000000	      1105 ns/op	     528 B/op	       7 allocs/op
 BenchmarkTask/InvokeAll-24       	    1298	    938814 ns/op	 1114347 B/op	   16023 allocs/op
 
-BenchmarkTask/Consume-24         	    3957	    318007 ns/op	  241218 B/op	    3015 allocs/op
-BenchmarkTask/Invoke-24          	 2524692	       493.7 ns/op	     224 B/op	       3 allocs/op
-BenchmarkTask/InvokeAll-24       	    2143	    550623 ns/op	  288871 B/op	    5007 allocs/op
-BenchmarkTask/Completed-24       	91335321	        13.33 ns/op	      32 B/op	       1 allocs/op
-BenchmarkTask/Errored-24         	88489048	        13.56 ns/op	      32 B/op	       1 allocs/op
+BenchmarkTask/Consume-24         	    4028	    337334 ns/op	  241230 B/op	    3015 allocs/op
+BenchmarkTask/Invoke-24          	 2388726	       511.1 ns/op	     224 B/op	       3 allocs/op
+BenchmarkTask/InvokeAll-24       	    3598	    348699 ns/op	  257562 B/op	    3016 allocs/op
+BenchmarkTask/Completed-24       	88502101	        13.60 ns/op	      32 B/op	       1 allocs/op
+BenchmarkTask/Errored-24         	87329888	        13.93 ns/op	      32 B/op	       1 allocs/op
 */
 func BenchmarkTask(b *testing.B) {
 	b.Run("Consume", func(b *testing.B) {
@@ -28,7 +28,7 @@ func BenchmarkTask(b *testing.B) {
 				tasks <- NewTask(func(context.Context) (any, error) { return nil, nil })
 			}
 			close(tasks)
-			Consume[any](context.Background(), concurrency, tasks).Outcome()
+			Consume(context.Background(), concurrency, tasks).Outcome()
 		}
 	})
 
@@ -46,7 +46,7 @@ func BenchmarkTask(b *testing.B) {
 			for i := 0; i < taskCount; i++ {
 				tasks = append(tasks, NewTask(func(context.Context) (any, error) { return nil, nil }))
 			}
-			InvokeAll[any](context.Background(), concurrency, tasks).Outcome()
+			InvokeAll(context.Background(), concurrency, tasks).Outcome()
 		}
 	})
 

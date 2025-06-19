@@ -11,21 +11,15 @@ func InvokeAll[T any](ctx context.Context, concurrency int, tasks []Task[T]) Tas
 		return forkJoin(ctx, tasks)
 	}
 
-	return Invoke(ctx, func(context.Context) (T, error) {
-		sem := make(chan struct{}, concurrency)
-		for _, task := range tasks {
-			sem <- struct{}{}
-			task.Run(ctx)
-			// Release semaphore when task completes
-			go func(t Task[T]) {
-				t.Outcome() // Wait for completion
-				<-sem
-			}(task)
-		}
-		WaitAll(tasks)
-		var zero T
-		return zero, nil
-	})
+	// Create a channel and send all tasks to it
+	queue := make(chan Task[T], len(tasks))
+	for _, task := range tasks {
+		queue <- task
+	}
+	close(queue)
+
+	// Use Consume to process tasks with concurrency control
+	return Consume(ctx, concurrency, queue)
 }
 
 // forkJoin executes input task in parallel and waits for ALL outcomes before returning.
