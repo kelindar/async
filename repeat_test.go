@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,10 +31,10 @@ func TestRepeat(t *testing.T) {
 }
 
 func TestRepeatType(t *testing.T) {
-	counter := 0
+	var counter int64
 	task := Repeat(context.TODO(), time.Millisecond*100, func(ctx context.Context) (string, error) {
-		counter++
-		return fmt.Sprintf("tick-%d", counter), nil
+		count := atomic.AddInt64(&counter, 1)
+		return fmt.Sprintf("tick-%d", count), nil
 	})
 
 	time.Sleep(time.Millisecond * 150)
@@ -50,9 +51,9 @@ func TestRepeatType(t *testing.T) {
 
 // TestRepeatWithError tests Repeat function when action returns an error
 func TestRepeatWithError(t *testing.T) {
-	errorCount := 0
+	var errorCount int64
 	task := Repeat(context.TODO(), time.Millisecond*10, func(ctx context.Context) (string, error) {
-		errorCount++
+		atomic.AddInt64(&errorCount, 1)
 		return "", errors.New("test error")
 	})
 
@@ -61,7 +62,8 @@ func TestRepeatWithError(t *testing.T) {
 	task.Cancel()
 
 	// Verify the action was called multiple times despite errors
-	assert.True(t, errorCount > 1, "Action should have been called multiple times, got %d", errorCount)
+	count := atomic.LoadInt64(&errorCount)
+	assert.True(t, count > 1, "Action should have been called multiple times, got %d", count)
 }
 
 // TestRepeatContextCancelled tests Repeat function when context is cancelled immediately
@@ -92,10 +94,10 @@ func TestRepeatNormalExecution(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
 	defer cancel()
 
-	actionCount := 0
+	var actionCount int64
 	task := Repeat(ctx, time.Millisecond*10, func(ctx context.Context) (string, error) {
-		actionCount++
-		return fmt.Sprintf("action-%d", actionCount), nil
+		count := atomic.AddInt64(&actionCount, 1)
+		return fmt.Sprintf("action-%d", count), nil
 	})
 
 	// Wait for task to complete (should timeout)
@@ -105,5 +107,6 @@ func TestRepeatNormalExecution(t *testing.T) {
 	assert.Empty(t, result)
 	assert.Error(t, err)
 	assert.Equal(t, context.DeadlineExceeded, err)
-	assert.True(t, actionCount >= 2, "Action should have been called multiple times, got %d", actionCount)
+	count := atomic.LoadInt64(&actionCount)
+	assert.True(t, count >= 2, "Action should have been called multiple times, got %d", count)
 }
