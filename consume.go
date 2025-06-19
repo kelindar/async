@@ -11,13 +11,13 @@ import (
 )
 
 // Consume runs the tasks with a specific max concurrency
-func Consume[T any](ctx context.Context, concurrency int, tasks chan Task[T]) Task[T] {
+func Consume[T any](ctx context.Context, concurrency int, tasks chan Task[T]) Awaiter {
 	if concurrency <= 0 {
 		concurrency = runtime.NumCPU()
 	}
 
 	// Start worker goroutines
-	return Invoke(ctx, func(taskCtx context.Context) (T, error) {
+	return Invoke(ctx, func(taskCtx context.Context) (any, error) {
 		var wg sync.WaitGroup
 
 		for i := 0; i < concurrency; i++ {
@@ -42,7 +42,6 @@ func Consume[T any](ctx context.Context, concurrency int, tasks chan Task[T]) Ta
 		}
 
 		wg.Wait()
-		var zero T
-		return zero, nil
+		return nil, nil
 	})
 }

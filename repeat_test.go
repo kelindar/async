@@ -80,10 +80,9 @@ func TestRepeatContextCancelled(t *testing.T) {
 	})
 
 	// Wait for task to complete
-	result, err := task.Outcome()
+	err := task.Wait()
 
 	// Task should complete with context error
-	assert.Empty(t, result)
 	assert.Error(t, err)
 	assert.Equal(t, context.Canceled, err)
 	assert.False(t, actionCalled, "Action should not have been called")
@@ -101,10 +100,9 @@ func TestRepeatNormalExecution(t *testing.T) {
 	})
 
 	// Wait for task to complete (should timeout)
-	result, err := task.Outcome()
+	err := task.Wait()
 
 	// Task should complete with context timeout
-	assert.Empty(t, result)
 	assert.Error(t, err)
 	assert.Equal(t, context.DeadlineExceeded, err)
 	count := atomic.LoadInt64(&actionCount)

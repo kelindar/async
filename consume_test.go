@@ -56,7 +56,7 @@ func TestProcessTaskPool_HappyPath(t *testing.T) {
 			close(taskChan)
 		}()
 		p := Consume(context.Background(), m.concurrency, taskChan)
-		_, err := p.Outcome()
+		err := p.Wait()
 		close(resChan)
 		assert.Nil(t, err, m.desc)
 
@@ -105,7 +105,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 			}
 		}()
 		p := Consume[any](ctx, m.concurrency, taskChan)
-		_, err := p.Outcome()
+		err := p.Wait()
 		assert.NotNil(t, err, m.desc)
 	}
 }
