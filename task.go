@@ -45,7 +45,6 @@ type outcome struct {
 // Task represents a unit of work to be done
 type task struct {
 	state    int32         // This indicates whether the task is started or not
-	cancel   signal        // The cancellation channel
 	done     signal        // The outcome channel
 	action   Work          // The work to do
 	outcome  outcome       // This is used to store the result
@@ -66,7 +65,6 @@ func NewTask(action Work) Task {
 	return &task{
 		action: action,
 		done:   make(signal, 1),
-		cancel: make(signal, 1),
 	}
 }
 
@@ -109,41 +107,32 @@ func (t *task) Run(ctx context.Context) Task {
 
 // Cancel cancels a running task.
 func (t *task) Cancel() {
-
-	// If the task was created but never started, transition directly to cancelled state
-	// and close the done channel and set the error.
-	if t.changeState(IsCreated, IsCancelled) {
+	switch {
+	case t.changeState(IsCreated, IsCancelled):
 		t.outcome = outcome{err: errCancelled}
 		close(t.done)
 		return
-	}
-
-	// Attempt to cancel the task if it's in the running state
-	if t.cancel != nil {
-		select {
-		case <-t.cancel:
-			return
-		default:
-			close(t.cancel)
-		}
+	case t.changeState(IsRunning, IsCancelled):
+		// already running, do nothing
 	}
 }
 
 // run starts the task synchronously.
 func (t *task) run(ctx context.Context) {
 	if !t.changeState(IsCreated, IsRunning) {
-		return // Prevent from running the same task twice
+		return // Prevent from running the same task twice or if already cancelled
 	}
 
 	// Notify everyone of the completion/error state
 	defer close(t.done)
 
 	// Check for cancellation before starting work
-	select {
-	case <-t.cancel:
+	if t.State() == IsCancelled {
 		t.outcome = outcome{err: errCancelled}
-		t.changeState(IsRunning, IsCancelled)
 		return
+	}
+
+	select {
 	case <-ctx.Done():
 		t.outcome = outcome{err: ctx.Err()}
 		t.changeState(IsRunning, IsCancelled)
@@ -171,15 +160,17 @@ func (t *task) run(ctx context.Context) {
 	t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
 
 	// Check if we were cancelled during execution
-	select {
-	case <-t.cancel:
+	switch {
+	case t.State() == IsCancelled:
 		t.outcome = outcome{err: errCancelled}
-		t.changeState(IsRunning, IsCancelled)
-	case <-ctx.Done():
-		t.outcome = outcome{err: ctx.Err()}
-		t.changeState(IsRunning, IsCancelled)
-	default:
-		t.changeState(IsRunning, IsCompleted)
+	case t.State() == IsRunning:
+		select {
+		case <-ctx.Done():
+			t.outcome = outcome{err: ctx.Err()}
+			t.changeState(IsRunning, IsCancelled)
+		default:
+			t.changeState(IsRunning, IsCompleted)
+		}
 	}
 }
 
@@ -195,7 +186,6 @@ func Completed() Task {
 	t := &task{
 		state:   int32(IsCompleted),
 		done:    make(signal, 1),
-		cancel:  make(signal, 1),
 		outcome: outcome{},
 	}
 	close(t.done)
