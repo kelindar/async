@@ -10,7 +10,7 @@ import (
 )
 
 // Repeat performs an action asynchronously on a predetermined interval.
-func Repeat[T any](ctx context.Context, interval time.Duration, action Work[T]) Task[T] {
+func Repeat[T any](ctx context.Context, interval time.Duration, action Work[T]) Awaiter {
 	return Invoke(ctx, func(taskCtx context.Context) (T, error) {
 		timer := time.NewTicker(interval)
 		for {

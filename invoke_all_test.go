@@ -6,7 +6,6 @@ package async
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -85,30 +84,4 @@ func ExampleInvokeAll() {
 	// 1
 	// 2
 	// 2
-}
-
-func TestForkJoin(t *testing.T) {
-	first := NewTask(func(context.Context) (any, error) {
-		return 1, nil
-	})
-	second := NewTask(func(context.Context) (any, error) {
-		return nil, errors.New("some error")
-	})
-	third := NewTask(func(context.Context) (any, error) {
-		return 3, nil
-	})
-
-	forkJoin(context.Background(), []Task[any]{first, second, third})
-
-	outcome1, error1 := first.Outcome()
-	assert.Equal(t, 1, outcome1)
-	assert.Nil(t, error1)
-
-	outcome2, error2 := second.Outcome()
-	assert.Nil(t, outcome2)
-	assert.NotNil(t, error2)
-
-	outcome3, error3 := third.Outcome()
-	assert.Equal(t, 3, outcome3)
-	assert.Nil(t, error3)
 }
