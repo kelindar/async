@@ -12,11 +12,11 @@ BenchmarkTask/Consume-24         	    1125	    974459 ns/op	 1122649 B/op	   160
 BenchmarkTask/Invoke-24          	 1000000	      1105 ns/op	     528 B/op	       7 allocs/op
 BenchmarkTask/InvokeAll-24       	    1298	    938814 ns/op	 1114347 B/op	   16023 allocs/op
 
-BenchmarkTask/Consume-24         	    4028	    337334 ns/op	  241230 B/op	    3015 allocs/op
-BenchmarkTask/Invoke-24          	 2388726	       511.1 ns/op	     224 B/op	       3 allocs/op
-BenchmarkTask/InvokeAll-24       	    3598	    348699 ns/op	  257562 B/op	    3016 allocs/op
-BenchmarkTask/Completed-24       	88502101	        13.60 ns/op	      32 B/op	       1 allocs/op
-BenchmarkTask/Errored-24         	87329888	        13.93 ns/op	      32 B/op	       1 allocs/op
+BenchmarkTask/Consume-24         	    4054	    309833 ns/op	  145127 B/op	    2014 allocs/op
+BenchmarkTask/Invoke-24          	 2361956	       507.6 ns/op	     128 B/op	       2 allocs/op
+BenchmarkTask/InvokeAll-24       	    4262	    303242 ns/op	  161449 B/op	    2015 allocs/op
+BenchmarkTask/Completed-24       	89886966	        13.36 ns/op	      32 B/op	       1 allocs/op
+BenchmarkTask/Errored-24         	89026714	        13.50 ns/op	      32 B/op	       1 allocs/op
 */
 func BenchmarkTask(b *testing.B) {
 	b.Run("Consume", func(b *testing.B) {

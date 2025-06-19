@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -34,8 +35,6 @@ const (
 	IsCancelled              // IsCancelled represents a task which was cancelled or has timed out
 )
 
-type signal chan struct{}
-
 // Outcome of the task contains a result and an error
 type outcome[T any] struct {
 	result T     // The result of the work
@@ -44,11 +43,11 @@ type outcome[T any] struct {
 
 // Task represents a unit of work to be done
 type task[T any] struct {
-	state    int32         // This indicates whether the task is started or not
-	done     signal        // The outcome channel
-	action   Work[T]       // The work to do
-	outcome  outcome[T]    // This is used to store the result
-	duration time.Duration // The duration of the task, in nanoseconds
+	state    int32          // This indicates whether the task is started or not
+	wg       sync.WaitGroup // Used to wait for completion instead of channel
+	action   Work[T]        // The work to do
+	outcome  outcome[T]     // This is used to store the result
+	duration time.Duration  // The duration of the task, in nanoseconds
 }
 
 // Task represents a unit of work to be done
@@ -62,10 +61,11 @@ type Task[T any] interface {
 
 // NewTask creates a new task.
 func NewTask[T any](action Work[T]) Task[T] {
-	return &task[T]{
+	t := &task[T]{
 		action: action,
-		done:   make(signal, 1),
 	}
+	t.wg.Add(1) // Will be Done() when task completes
+	return t
 }
 
 // NewTasks creates a set of new tasks.
@@ -79,7 +79,7 @@ func NewTasks[T any](actions ...Work[T]) []Task[T] {
 
 // Outcome waits until the task is done and returns the final result and error.
 func (t *task[T]) Outcome() (T, error) {
-	<-t.done
+	t.wg.Wait()
 	return t.outcome.result, t.outcome.err
 }
 
@@ -106,7 +106,7 @@ func (t *task[T]) Cancel() {
 	case t.changeState(IsCreated, IsCancelled):
 		var zero T
 		t.outcome = outcome[T]{result: zero, err: errCancelled}
-		close(t.done)
+		t.wg.Done()
 		return
 	case t.changeState(IsRunning, IsCancelled):
 		// already running, do nothing
@@ -120,7 +120,7 @@ func (t *task[T]) run(ctx context.Context) {
 	}
 
 	// Notify everyone of the completion/error state
-	defer close(t.done)
+	defer t.wg.Done()
 
 	// Check for cancellation before starting work
 	if t.State() == IsCancelled {
