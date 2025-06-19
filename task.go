@@ -1,5 +1,5 @@
 // Copyright 2019 Grabtaxi Holdings PTE LTE (GRAB), All rights reserved.
-// Copyright 2021 Roman Atachiants
+// Copyright (c) 2021-2025 Roman Atachiants
 // Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
 
 package async
@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -21,7 +22,7 @@ var (
 var now = time.Now
 
 // Work represents a handler to execute
-type Work func(context.Context) (any, error)
+type Work[T any] func(context.Context) (T, error)
 
 // State represents the state enumeration for a task.
 type State byte
@@ -34,177 +35,196 @@ const (
 	IsCancelled              // IsCancelled represents a task which was cancelled or has timed out
 )
 
-type signal chan struct{}
-
 // Outcome of the task contains a result and an error
-type outcome struct {
-	result any   // The result of the work
+type outcome[T any] struct {
+	result T     // The result of the work
 	err    error // The error
 }
 
 // Task represents a unit of work to be done
-type task struct {
-	state    int32         // This indicates whether the task is started or not
-	cancel   signal        // The cancellation channel
-	done     signal        // The outcome channel
-	action   Work          // The work to do
-	outcome  outcome       // This is used to store the result
-	duration time.Duration // The duration of the task, in nanoseconds
+type task[T any] struct {
+	state    int32          // This indicates whether the task is started or not
+	duration int64          // The duration of the task, in nanoseconds
+	wg       sync.WaitGroup // Used to wait for completion instead of channel
+	action   Work[T]        // The work to do
+	outcome  outcome[T]     // This is used to store the result
+
 }
 
 // Task represents a unit of work to be done
-type Task interface {
-	Run(ctx context.Context) Task
+type Task[T any] interface {
+	Run(ctx context.Context) Task[T]
 	Cancel()
 	State() State
-	Outcome() (any, error)
-	ContinueWith(ctx context.Context, nextAction func(any, error) (any, error)) Task
+	Outcome() (T, error)
 	Duration() time.Duration
 }
 
 // NewTask creates a new task.
-func NewTask(action Work) Task {
-	return &task{
+func NewTask[T any](action Work[T]) Task[T] {
+	t := &task[T]{
 		action: action,
-		done:   make(signal, 1),
-		cancel: make(signal, 1),
 	}
+	t.wg.Add(1) // Will be Done() when task completes
+	return t
 }
 
 // NewTasks creates a set of new tasks.
-func NewTasks(actions ...Work) []Task {
-	tasks := make([]Task, 0, len(actions))
+func NewTasks[T any](actions ...Work[T]) []Task[T] {
+	tasks := make([]Task[T], 0, len(actions))
 	for _, action := range actions {
 		tasks = append(tasks, NewTask(action))
 	}
 	return tasks
 }
 
-// Invoke creates a new tasks and runs it asynchronously.
-func Invoke(ctx context.Context, action Work) Task {
-	return NewTask(action).Run(ctx)
-}
-
 // Outcome waits until the task is done and returns the final result and error.
-func (t *task) Outcome() (any, error) {
-	<-t.done
+func (t *task[T]) Outcome() (T, error) {
+	t.wg.Wait()
 	return t.outcome.result, t.outcome.err
 }
 
 // State returns the current state of the task. This operation is non-blocking.
-func (t *task) State() State {
+func (t *task[T]) State() State {
 	v := atomic.LoadInt32(&t.state)
 	return State(v)
 }
 
 // Duration returns the duration of the task.
-func (t *task) Duration() time.Duration {
-	return t.duration
+func (t *task[T]) Duration() time.Duration {
+	return time.Duration(atomic.LoadInt64(&t.duration))
 }
 
 // Run starts the task asynchronously.
-func (t *task) Run(ctx context.Context) Task {
+func (t *task[T]) Run(ctx context.Context) Task[T] {
 	go t.run(ctx)
 	return t
 }
 
 // Cancel cancels a running task.
-func (t *task) Cancel() {
-
-	// If the task was created but never started, transition directly to cancelled state
-	// and close the done channel and set the error.
-	if t.changeState(IsCreated, IsCancelled) {
-		t.outcome = outcome{err: errCancelled}
-		close(t.done)
+func (t *task[T]) Cancel() {
+	switch {
+	case t.changeState(IsCreated, IsCancelled):
+		var zero T
+		t.outcome = outcome[T]{result: zero, err: errCancelled}
+		t.wg.Done()
 		return
-	}
-
-	// Attempt to cancel the task if it's in the running state
-	if t.cancel != nil {
-		select {
-		case <-t.cancel:
-			return
-		default:
-			close(t.cancel)
-		}
+	case t.changeState(IsRunning, IsCancelled):
+		// already running, do nothing
 	}
 }
 
 // run starts the task synchronously.
-func (t *task) run(ctx context.Context) {
+func (t *task[T]) run(ctx context.Context) {
 	if !t.changeState(IsCreated, IsRunning) {
-		return // Prevent from running the same task twice
+		return // Prevent from running the same task twice or if already cancelled
 	}
 
 	// Notify everyone of the completion/error state
-	defer close(t.done)
+	defer t.wg.Done()
 
-	// Execute the task
+	// Check for cancellation before starting work
+	if t.State() == IsCancelled {
+		var zero T
+		t.outcome = outcome[T]{result: zero, err: errCancelled}
+		return
+	}
+
+	select {
+	case <-ctx.Done():
+		var zero T
+		t.outcome = outcome[T]{result: zero, err: ctx.Err()}
+		t.changeState(IsRunning, IsCancelled)
+		return
+	default:
+		// Continue to work execution
+	}
+
+	// Execute the task directly with panic recovery
 	startedAt := now().UnixNano()
-	outcomeCh := make(chan outcome, 1)
-	go func() {
+
+	func() {
 		defer func() {
 			if out := recover(); out != nil {
-				outcomeCh <- outcome{err: fmt.Errorf("%w: %s\n%s",
+				var zero T
+				t.outcome = outcome[T]{result: zero, err: fmt.Errorf("%w: %s\n%s",
 					ErrPanic, out, debug.Stack())}
 				return
 			}
 		}()
 
 		r, e := t.action(ctx)
-		outcomeCh <- outcome{result: r, err: e}
+		t.outcome = outcome[T]{result: r, err: e}
 	}()
 
-	select {
+	atomic.StoreInt64(&t.duration, now().UnixNano()-startedAt)
 
-	// In case of a manual task cancellation, set the outcome and transition
-	// to the cancelled state.
-	case <-t.cancel:
-		t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
-		t.outcome = outcome{err: errCancelled}
-		t.changeState(IsRunning, IsCancelled)
-		return
-
-	// In case of the context timeout or other error, change the state of the
-	// task to cancelled and return right away.
-	case <-ctx.Done():
-		t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
-		t.outcome = outcome{err: ctx.Err()}
-		t.changeState(IsRunning, IsCancelled)
-		return
-
-	// In case where we got an outcome (happy path)
-	case o := <-outcomeCh:
-		t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
-		t.outcome = o
-		t.changeState(IsRunning, IsCompleted)
-		return
+	// Check if we were cancelled during execution
+	switch {
+	case t.State() == IsCancelled:
+		var zero T
+		t.outcome = outcome[T]{result: zero, err: errCancelled}
+	case t.State() == IsRunning:
+		select {
+		case <-ctx.Done():
+			var zero T
+			t.outcome = outcome[T]{result: zero, err: ctx.Err()}
+			t.changeState(IsRunning, IsCancelled)
+		default:
+			t.changeState(IsRunning, IsCompleted)
+		}
 	}
-}
-
-// ContinueWith proceeds with the next task once the current one is finished.
-func (t *task) ContinueWith(ctx context.Context, nextAction func(any, error) (any, error)) Task {
-	return Invoke(ctx, func(context.Context) (any, error) {
-		result, err := t.Outcome()
-		return nextAction(result, err)
-	})
 }
 
 // Cancel cancels a running task.
-func (t *task) changeState(from, to State) bool {
+func (t *task[T]) changeState(from, to State) bool {
 	return atomic.CompareAndSwapInt32(&t.state, int32(from), int32(to))
 }
 
-// -------------------------------- No-Op Task --------------------------------
+// Invoke creates a new tasks and runs it asynchronously.
+func Invoke[T any](ctx context.Context, action Work[T]) Task[T] {
+	return NewTask(action).Run(ctx)
+}
 
-// Completed creates a completed task.
-func Completed() Task {
-	t := &task{
-		state:   int32(IsCompleted),
-		done:    make(signal, 1),
-		cancel:  make(signal, 1),
-		outcome: outcome{},
-	}
-	close(t.done)
+// -------------------------------- Completed Task --------------------------------
+
+// completedTask represents a task that is already completed
+type completedTask[T any] struct {
+	out T
+	err error
+}
+
+// Run returns the task itself since it's already completed
+func (t *completedTask[T]) Run(ctx context.Context) Task[T] {
 	return t
+}
+
+// Cancel does nothing since the task is already completed
+func (t *completedTask[T]) Cancel() {}
+
+// State always returns IsCompleted
+func (t *completedTask[T]) State() State {
+	return IsCompleted
+}
+
+// Outcome immediately returns the result
+func (t *completedTask[T]) Outcome() (T, error) {
+	return t.out, t.err
+}
+
+// Duration returns zero since no work was performed
+func (t *completedTask[T]) Duration() time.Duration {
+	return 0
+}
+
+// -------------------------------- Factory Functions --------------------------------
+
+// Completed creates a completed task with the given result.
+func Completed[T any](result T) Task[T] {
+	return &completedTask[T]{out: result}
+}
+
+// Failed creates a failed task with the given error.
+func Failed[T any](err error) Task[T] {
+	return &completedTask[T]{err: err}
 }

@@ -1,4 +1,5 @@
 // Copyright 2019 Grabtaxi Holdings PTE LTE (GRAB), All rights reserved.
+// Copyright (c) 2021-2025 Roman Atachiants
 // Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
 
 package async
@@ -42,7 +43,7 @@ func TestProcessTaskPool_HappyPath(t *testing.T) {
 	for _, test := range tests {
 		m := test
 		resChan := make(chan struct{}, m.taskCount)
-		taskChan := make(chan Task)
+		taskChan := make(chan Task[any])
 
 		go func() {
 			for i := 0; i < m.taskCount; i++ {
@@ -91,7 +92,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 
 	for _, test := range tests {
 		m := test
-		taskChan := make(chan Task)
+		taskChan := make(chan Task[any])
 		ctx, cancel := context.WithTimeout(context.Background(), m.timeOut*time.Millisecond)
 		defer cancel()
 
@@ -103,7 +104,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 				})
 			}
 		}()
-		p := Consume(ctx, m.concurrency, taskChan)
+		p := Consume[any](ctx, m.concurrency, taskChan)
 		_, err := p.Outcome()
 		assert.NotNil(t, err, m.desc)
 	}

@@ -1,4 +1,5 @@
 // Copyright 2019 Grabtaxi Holdings PTE LTE (GRAB), All rights reserved.
+// Copyright (c) 2021-2025 Roman Atachiants
 // Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
 
 package async
@@ -9,16 +10,15 @@ import (
 )
 
 // Repeat performs an action asynchronously on a predetermined interval.
-func Repeat(ctx context.Context, interval time.Duration, action Work) Task {
-
-	// Invoke the task timer
-	return Invoke(ctx, func(taskCtx context.Context) (any, error) {
+func Repeat[T any](ctx context.Context, interval time.Duration, action Work[T]) Task[T] {
+	return Invoke(ctx, func(taskCtx context.Context) (T, error) {
 		timer := time.NewTicker(interval)
 		for {
 			select {
 			case <-taskCtx.Done():
 				timer.Stop()
-				return nil, nil
+				var zero T
+				return zero, nil
 
 			case <-timer.C:
 				_, _ = action(taskCtx)
