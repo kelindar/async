@@ -9,16 +9,15 @@ import (
 )
 
 // Repeat performs an action asynchronously on a predetermined interval.
-func Repeat(ctx context.Context, interval time.Duration, action Work[any]) Task[any] {
-
-	// Invoke the task timer
-	return Invoke(ctx, func(taskCtx context.Context) (any, error) {
+func Repeat[T any](ctx context.Context, interval time.Duration, action Work[T]) Task[T] {
+	return Invoke(ctx, func(taskCtx context.Context) (T, error) {
 		timer := time.NewTicker(interval)
 		for {
 			select {
 			case <-taskCtx.Done():
 				timer.Stop()
-				return nil, nil
+				var zero T
+				return zero, nil
 
 			case <-timer.C:
 				_, _ = action(taskCtx)

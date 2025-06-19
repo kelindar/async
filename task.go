@@ -185,15 +185,45 @@ func Invoke[T any](ctx context.Context, action Work[T]) Task[T] {
 	return NewTask(action).Run(ctx)
 }
 
-// -------------------------------- No-Op Task --------------------------------
+// -------------------------------- Completed Task --------------------------------
 
-// Completed creates a completed task.
-func Completed[T any]() Task[T] {
-	t := &task[T]{
-		state:   int32(IsCompleted),
-		done:    make(signal, 1),
-		outcome: outcome[T]{},
-	}
-	close(t.done)
+// completedTask represents a task that is already completed
+type completedTask[T any] struct {
+	out T
+	err error
+}
+
+// Run returns the task itself since it's already completed
+func (t *completedTask[T]) Run(ctx context.Context) Task[T] {
 	return t
+}
+
+// Cancel does nothing since the task is already completed
+func (t *completedTask[T]) Cancel() {}
+
+// State always returns IsCompleted
+func (t *completedTask[T]) State() State {
+	return IsCompleted
+}
+
+// Outcome immediately returns the result
+func (t *completedTask[T]) Outcome() (T, error) {
+	return t.out, t.err
+}
+
+// Duration returns zero since no work was performed
+func (t *completedTask[T]) Duration() time.Duration {
+	return 0
+}
+
+// -------------------------------- Factory Functions --------------------------------
+
+// Completed creates a completed task with the given result.
+func Completed[T any](result T) Task[T] {
+	return &completedTask[T]{out: result}
+}
+
+// Failed creates a failed task with the given error.
+func Failed[T any](err error) Task[T] {
+	return &completedTask[T]{err: err}
 }

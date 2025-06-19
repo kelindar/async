@@ -6,6 +6,7 @@ package async
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -95,10 +96,19 @@ func TestTaskCancelTwice(t *testing.T) {
 }
 
 func TestCompleted(t *testing.T) {
-	task := Completed[any]()
+	task := Completed[any](nil)
 	assert.Equal(t, IsCompleted, task.State())
 	v, err := task.Outcome()
 	assert.Nil(t, err)
+	assert.Nil(t, v)
+}
+
+func TestErrored(t *testing.T) {
+	expectedErr := errors.New("test error")
+	task := Failed[any](expectedErr)
+	assert.Equal(t, IsCompleted, task.State())
+	v, err := task.Outcome()
+	assert.Equal(t, expectedErr, err)
 	assert.Nil(t, v)
 }
 
@@ -111,4 +121,25 @@ func TestPanic(t *testing.T) {
 		assert.Error(t, err)
 		assert.True(t, errors.Is(err, ErrPanic))
 	})
+}
+
+func TestCompletedAndErrored(t *testing.T) {
+	// Create a completed task with a string result
+	completedTask := Completed("success")
+	result, err := completedTask.Outcome()
+	fmt.Printf("Completed: %s, Error: %v\n", result, err)
+
+	// Create an errored task
+	erroredTask := Failed[string](errors.New("operation failed"))
+	result2, err2 := erroredTask.Outcome()
+	fmt.Printf("Errored: %s, Error: %v\n", result2, err2)
+
+	// These tasks are already completed, so Run() does nothing
+	completedTask.Run(context.Background())
+	fmt.Printf("State: %v\n", completedTask.State())
+
+	// Output:
+	// Completed: success, Error: <nil>
+	// Errored: , Error: operation failed
+	// State: 2
 }

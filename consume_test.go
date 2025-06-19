@@ -103,7 +103,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 				})
 			}
 		}()
-		p := Consume(ctx, m.concurrency, taskChan)
+		p := Consume[any](ctx, m.concurrency, taskChan)
 		_, err := p.Outcome()
 		assert.NotNil(t, err, m.desc)
 	}
