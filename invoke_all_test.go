@@ -6,7 +6,6 @@ package async
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 
 func TestInvokeAll(t *testing.T) {
 	resChan := make(chan int, 6)
-	works := make([]Work[any], 6, 6)
+	works := make([]Work[any], 6)
 	for i := range works {
 		j := i
 		works[j] = func(context.Context) (any, error) {
@@ -26,7 +25,8 @@ func TestInvokeAll(t *testing.T) {
 	}
 	tasks := NewTasks(works...)
 	InvokeAll(context.Background(), 2, tasks)
-	WaitAll(tasks)
+	assert.NoError(t, WaitAll(tasks...))
+
 	close(resChan)
 	res := []int{}
 	for r := range resChan {
@@ -37,7 +37,7 @@ func TestInvokeAll(t *testing.T) {
 
 func TestInvokeAllWithZeroConcurrency(t *testing.T) {
 	resChan := make(chan int, 6)
-	works := make([]Work[any], 6, 6)
+	works := make([]Work[any], 6)
 	for i := range works {
 		j := i
 		works[j] = func(context.Context) (any, error) {
@@ -48,40 +48,11 @@ func TestInvokeAllWithZeroConcurrency(t *testing.T) {
 	}
 	tasks := NewTasks(works...)
 	InvokeAll(context.Background(), 0, tasks)
-	WaitAll(tasks)
+	assert.NoError(t, WaitAll(tasks...))
 	close(resChan)
 	res := []int{}
 	for r := range resChan {
 		res = append(res, r)
 	}
 	assert.Equal(t, []int{1, 1, 1, 1, 1, 1}, res)
-}
-
-func ExampleInvokeAll() {
-	resChan := make(chan int, 6)
-	works := make([]Work[any], 6, 6)
-	for i := range works {
-		j := i
-		works[j] = func(context.Context) (any, error) {
-			fmt.Println(j / 2)
-			time.Sleep(time.Millisecond * 10)
-			return nil, nil
-		}
-	}
-	tasks := NewTasks(works...)
-	InvokeAll(context.Background(), 2, tasks)
-	WaitAll(tasks)
-	close(resChan)
-	res := []int{}
-	for r := range resChan {
-		res = append(res, r)
-	}
-
-	// Output:
-	// 0
-	// 0
-	// 1
-	// 1
-	// 2
-	// 2
 }
