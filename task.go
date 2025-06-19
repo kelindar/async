@@ -139,46 +139,48 @@ func (t *task) run(ctx context.Context) {
 	// Notify everyone of the completion/error state
 	defer close(t.done)
 
-	// Execute the task
+	// Check for cancellation before starting work
+	select {
+	case <-t.cancel:
+		t.outcome = outcome{err: errCancelled}
+		t.changeState(IsRunning, IsCancelled)
+		return
+	case <-ctx.Done():
+		t.outcome = outcome{err: ctx.Err()}
+		t.changeState(IsRunning, IsCancelled)
+		return
+	default:
+		// Continue to work execution
+	}
+
+	// Execute the task directly with panic recovery
 	startedAt := now().UnixNano()
-	outcomeCh := make(chan outcome, 1)
-	go func() {
+
+	func() {
 		defer func() {
 			if out := recover(); out != nil {
-				outcomeCh <- outcome{err: fmt.Errorf("%w: %s\n%s",
+				t.outcome = outcome{err: fmt.Errorf("%w: %s\n%s",
 					ErrPanic, out, debug.Stack())}
 				return
 			}
 		}()
 
 		r, e := t.action(ctx)
-		outcomeCh <- outcome{result: r, err: e}
+		t.outcome = outcome{result: r, err: e}
 	}()
 
-	select {
+	t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
 
-	// In case of a manual task cancellation, set the outcome and transition
-	// to the cancelled state.
+	// Check if we were cancelled during execution
+	select {
 	case <-t.cancel:
-		t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
 		t.outcome = outcome{err: errCancelled}
 		t.changeState(IsRunning, IsCancelled)
-		return
-
-	// In case of the context timeout or other error, change the state of the
-	// task to cancelled and return right away.
 	case <-ctx.Done():
-		t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
 		t.outcome = outcome{err: ctx.Err()}
 		t.changeState(IsRunning, IsCancelled)
-		return
-
-	// In case where we got an outcome (happy path)
-	case o := <-outcomeCh:
-		t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
-		t.outcome = o
+	default:
 		t.changeState(IsRunning, IsCompleted)
-		return
 	}
 }
 
