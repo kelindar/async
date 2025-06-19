@@ -238,6 +238,7 @@ func TestCompletedTaskRun(t *testing.T) {
 	// Should still return the same result
 	value, err := result.Outcome()
 	assert.NoError(t, err)
+	assert.NoError(t, result.Wait())
 	assert.Equal(t, "test result", value)
 }
 
@@ -306,4 +307,14 @@ func TestTaskContextCancelledDuringExecution(t *testing.T) {
 	assert.Empty(t, result)
 	assert.Error(t, err)
 	assert.Equal(t, context.Canceled, err)
+}
+
+func TestWait(t *testing.T) {
+	task := NewTask(func(ctx context.Context) (string, error) {
+		return "", errors.New("test error")
+	})
+
+	task.Run(context.Background())
+	assert.Error(t, task.Wait())
+	assert.Error(t, task.Wait())
 }

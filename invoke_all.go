@@ -7,7 +7,7 @@ package async
 import "context"
 
 // InvokeAll runs the tasks with a specific max concurrency
-func InvokeAll[T any](ctx context.Context, concurrency int, tasks []Task[T]) Task[T] {
+func InvokeAll[T any](ctx context.Context, concurrency int, tasks []Task[T]) Awaiter {
 	if concurrency == 0 {
 		return forkJoin(ctx, tasks)
 	}

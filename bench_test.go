@@ -31,7 +31,7 @@ func BenchmarkTask(b *testing.B) {
 				tasks <- NewTask(func(context.Context) (any, error) { return nil, nil })
 			}
 			close(tasks)
-			Consume(context.Background(), concurrency, tasks).Outcome()
+			Consume(context.Background(), concurrency, tasks).Wait()
 		}
 	})
 
@@ -49,7 +49,7 @@ func BenchmarkTask(b *testing.B) {
 			for i := 0; i < taskCount; i++ {
 				tasks = append(tasks, NewTask(func(context.Context) (any, error) { return nil, nil }))
 			}
-			InvokeAll(context.Background(), concurrency, tasks).Outcome()
+			InvokeAll(context.Background(), concurrency, tasks).Wait()
 		}
 	})
 

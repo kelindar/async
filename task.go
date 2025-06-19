@@ -48,14 +48,19 @@ type task[T any] struct {
 	wg       sync.WaitGroup // Used to wait for completion instead of channel
 	action   Work[T]        // The work to do
 	outcome  outcome[T]     // This is used to store the result
+}
 
+// Awaiter is an interface that can be used to wait for a task to complete.
+type Awaiter interface {
+	Wait() error
+	Cancel()
+	State() State
 }
 
 // Task represents a unit of work to be done
 type Task[T any] interface {
+	Awaiter
 	Run(ctx context.Context) Task[T]
-	Cancel()
-	State() State
 	Outcome() (T, error)
 	Duration() time.Duration
 }
@@ -82,6 +87,12 @@ func NewTasks[T any](actions ...Work[T]) []Task[T] {
 func (t *task[T]) Outcome() (T, error) {
 	t.wg.Wait()
 	return t.outcome.result, t.outcome.err
+}
+
+// Wait waits for the task to complete and returns the error.
+func (t *task[T]) Wait() error {
+	t.wg.Wait()
+	return t.outcome.err
 }
 
 // State returns the current state of the task. This operation is non-blocking.
@@ -210,6 +221,11 @@ func (t *completedTask[T]) State() State {
 // Outcome immediately returns the result
 func (t *completedTask[T]) Outcome() (T, error) {
 	return t.out, t.err
+}
+
+// Wait waits for the task to complete and returns the error.
+func (t *completedTask[T]) Wait() error {
+	return t.err
 }
 
 // Duration returns zero since no work was performed
