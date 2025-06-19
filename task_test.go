@@ -95,7 +95,7 @@ func TestTaskCancelTwice(t *testing.T) {
 }
 
 func TestCompleted(t *testing.T) {
-	task := Completed()
+	task := Completed[any]()
 	assert.Equal(t, IsCompleted, task.State())
 	v, err := task.Outcome()
 	assert.Nil(t, err)

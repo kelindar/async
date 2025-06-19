@@ -6,7 +6,7 @@ package async
 import "context"
 
 // InvokeAll runs the tasks with a specific max concurrency
-func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
+func InvokeAll(ctx context.Context, concurrency int, tasks []Task[any]) Task[any] {
 	if concurrency == 0 {
 		return forkJoin(ctx, tasks)
 	}
@@ -17,7 +17,7 @@ func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
 			sem <- struct{}{}
 			task.Run(ctx)
 			// Release semaphore when task completes
-			go func(t Task) {
+			go func(t Task[any]) {
 				t.Outcome() // Wait for completion
 				<-sem
 			}(task)
@@ -28,7 +28,7 @@ func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
 }
 
 // forkJoin executes input task in parallel and waits for ALL outcomes before returning.
-func forkJoin(ctx context.Context, tasks []Task) Task {
+func forkJoin(ctx context.Context, tasks []Task[any]) Task[any] {
 	return Invoke(ctx, func(context.Context) (any, error) {
 		for _, task := range tasks {
 			_ = task.Run(ctx)
@@ -39,7 +39,7 @@ func forkJoin(ctx context.Context, tasks []Task) Task {
 }
 
 // WaitAll waits for all tasks to finish.
-func WaitAll(tasks []Task) {
+func WaitAll(tasks []Task[any]) {
 	for _, task := range tasks {
 		if task != nil {
 			_, _ = task.Outcome()
@@ -48,7 +48,7 @@ func WaitAll(tasks []Task) {
 }
 
 // CancelAll cancels all specified tasks.
-func CancelAll(tasks []Task) {
+func CancelAll(tasks []Task[any]) {
 	for _, task := range tasks {
 		task.Cancel()
 	}

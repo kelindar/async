@@ -42,7 +42,7 @@ func TestProcessTaskPool_HappyPath(t *testing.T) {
 	for _, test := range tests {
 		m := test
 		resChan := make(chan struct{}, m.taskCount)
-		taskChan := make(chan Task)
+		taskChan := make(chan Task[any])
 
 		go func() {
 			for i := 0; i < m.taskCount; i++ {
@@ -91,7 +91,7 @@ func TestProcessTaskPool_SadPath(t *testing.T) {
 
 	for _, test := range tests {
 		m := test
-		taskChan := make(chan Task)
+		taskChan := make(chan Task[any])
 		ctx, cancel := context.WithTimeout(context.Background(), m.timeOut*time.Millisecond)
 		defer cancel()
 

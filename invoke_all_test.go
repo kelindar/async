@@ -15,7 +15,7 @@ import (
 
 func TestInvokeAll(t *testing.T) {
 	resChan := make(chan int, 6)
-	works := make([]Work, 6, 6)
+	works := make([]Work[any], 6, 6)
 	for i := range works {
 		j := i
 		works[j] = func(context.Context) (any, error) {
@@ -37,7 +37,7 @@ func TestInvokeAll(t *testing.T) {
 
 func TestInvokeAllWithZeroConcurrency(t *testing.T) {
 	resChan := make(chan int, 6)
-	works := make([]Work, 6, 6)
+	works := make([]Work[any], 6, 6)
 	for i := range works {
 		j := i
 		works[j] = func(context.Context) (any, error) {
@@ -59,7 +59,7 @@ func TestInvokeAllWithZeroConcurrency(t *testing.T) {
 
 func ExampleInvokeAll() {
 	resChan := make(chan int, 6)
-	works := make([]Work, 6, 6)
+	works := make([]Work[any], 6, 6)
 	for i := range works {
 		j := i
 		works[j] = func(context.Context) (any, error) {
@@ -97,7 +97,7 @@ func TestForkJoin(t *testing.T) {
 		return 3, nil
 	})
 
-	forkJoin(context.Background(), []Task{first, second, third})
+	forkJoin(context.Background(), []Task[any]{first, second, third})
 
 	outcome1, error1 := first.Outcome()
 	assert.Equal(t, 1, outcome1)
