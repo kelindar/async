@@ -44,10 +44,11 @@ type outcome[T any] struct {
 // Task represents a unit of work to be done
 type task[T any] struct {
 	state    int32          // This indicates whether the task is started or not
+	duration int64          // The duration of the task, in nanoseconds
 	wg       sync.WaitGroup // Used to wait for completion instead of channel
 	action   Work[T]        // The work to do
 	outcome  outcome[T]     // This is used to store the result
-	duration time.Duration  // The duration of the task, in nanoseconds
+
 }
 
 // Task represents a unit of work to be done
@@ -91,7 +92,7 @@ func (t *task[T]) State() State {
 
 // Duration returns the duration of the task.
 func (t *task[T]) Duration() time.Duration {
-	return t.duration
+	return time.Duration(atomic.LoadInt64(&t.duration))
 }
 
 // Run starts the task asynchronously.
@@ -156,7 +157,7 @@ func (t *task[T]) run(ctx context.Context) {
 		t.outcome = outcome[T]{result: r, err: e}
 	}()
 
-	t.duration = time.Nanosecond * time.Duration(now().UnixNano()-startedAt)
+	atomic.StoreInt64(&t.duration, now().UnixNano()-startedAt)
 
 	// Check if we were cancelled during execution
 	switch {
