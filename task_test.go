@@ -52,46 +52,6 @@ func TestOutcomeTimeout(t *testing.T) {
 	assert.Equal(t, "context deadline exceeded", err.Error())
 }
 
-func TestContinueWithChain(t *testing.T) {
-	task1 := Invoke(context.Background(), func(context.Context) (any, error) {
-		return 1, nil
-	})
-
-	ctx := context.TODO()
-	task2 := task1.ContinueWith(ctx, func(result any, _ error) (any, error) {
-		return result.(int) + 1, nil
-	})
-
-	task3 := task2.ContinueWith(ctx, func(result any, _ error) (any, error) {
-		return result.(int) + 1, nil
-	})
-
-	result, err := task3.Outcome()
-	assert.Equal(t, 3, result)
-	assert.Nil(t, err)
-}
-
-func TestContinueTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	first := Invoke(ctx, func(context.Context) (any, error) {
-		return 5, nil
-	})
-
-	second := first.ContinueWith(ctx, func(result any, err error) (any, error) {
-		time.Sleep(500 * time.Millisecond)
-		return result, err
-	})
-
-	r1, err1 := first.Outcome()
-	assert.Equal(t, 5, r1)
-	assert.Nil(t, err1)
-
-	_, err2 := second.Outcome()
-	assert.Equal(t, "context deadline exceeded", err2.Error())
-}
-
 func TestTaskCancelStarted(t *testing.T) {
 	task := Invoke(context.Background(), func(context.Context) (any, error) {
 		time.Sleep(500 * time.Millisecond)

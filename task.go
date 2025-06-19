@@ -58,7 +58,6 @@ type Task interface {
 	Cancel()
 	State() State
 	Outcome() (any, error)
-	ContinueWith(ctx context.Context, nextAction func(any, error) (any, error)) Task
 	Duration() time.Duration
 }
 
@@ -182,14 +181,6 @@ func (t *task) run(ctx context.Context) {
 	default:
 		t.changeState(IsRunning, IsCompleted)
 	}
-}
-
-// ContinueWith proceeds with the next task once the current one is finished.
-func (t *task) ContinueWith(ctx context.Context, nextAction func(any, error) (any, error)) Task {
-	return Invoke(ctx, func(context.Context) (any, error) {
-		result, err := t.Outcome()
-		return nextAction(result, err)
-	})
 }
 
 // Cancel cancels a running task.

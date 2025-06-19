@@ -6,6 +6,7 @@ package async
 import (
 	"context"
 	"runtime"
+	"sync"
 )
 
 // Consume runs the tasks with a specific max concurrency
@@ -14,43 +15,31 @@ func Consume(ctx context.Context, concurrency int, tasks chan Task) Task {
 		concurrency = runtime.NumCPU()
 	}
 
+	// Start worker goroutines
 	return Invoke(ctx, func(taskCtx context.Context) (any, error) {
-		workers := make(chan int, concurrency)
-		concurrentTasks := make([]Task, concurrency)
-		// generate worker IDs
-		for id := 0; id < concurrency; id++ {
-			workers <- id
-		}
+		var wg sync.WaitGroup
+		for i := 0; i < concurrency; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					select {
+					case task, ok := <-tasks:
+						if !ok {
+							return // Channel closed
+						}
+						// Execute task and wait for completion directly in worker
+						task.Run(taskCtx)
+						task.Outcome() // Wait for completion
 
-		for {
-			select {
-			// context cancelled
-			case <-taskCtx.Done():
-				WaitAll(concurrentTasks)
-				return nil, taskCtx.Err()
-
-				// worker available
-			case workerID := <-workers:
-				select {
-				// worker is waiting for job when context is cancelled
-				case <-taskCtx.Done():
-					WaitAll(concurrentTasks)
-					return nil, taskCtx.Err()
-
-				case t, ok := <-tasks:
-					// if task channel is closed
-					if !ok {
-						WaitAll(concurrentTasks)
-						return nil, nil
+					case <-taskCtx.Done():
+						return // Context cancelled
 					}
-					concurrentTasks[workerID] = t
-					t.Run(taskCtx).ContinueWith(taskCtx,
-						func(any, error) (any, error) {
-							workers <- workerID
-							return nil, nil
-						})
 				}
-			}
+			}()
 		}
+
+		wg.Wait()
+		return nil, nil
 	})
 }

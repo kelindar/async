@@ -15,11 +15,12 @@ func InvokeAll(ctx context.Context, concurrency int, tasks []Task) Task {
 		sem := make(chan struct{}, concurrency)
 		for _, task := range tasks {
 			sem <- struct{}{}
-			task.Run(ctx).ContinueWith(ctx,
-				func(any, error) (any, error) {
-					<-sem
-					return nil, nil
-				})
+			task.Run(ctx)
+			// Release semaphore when task completes
+			go func(t Task) {
+				t.Outcome() // Wait for completion
+				<-sem
+			}(task)
 		}
 		WaitAll(tasks)
 		return nil, nil
