@@ -43,12 +43,12 @@ type outcome[T any] struct {
 
 // task represents a unit of work to be done
 type task[T any] struct {
-	state    int32                                   // This indicates whether the task is started or not
-	duration int64                                   // The duration of the task, in nanoseconds
-	wg       sync.WaitGroup                          // Used to wait for completion instead of channel
-	action   Work[T]                                 // The work to do
-	outcome  outcome[T]                              // This is used to store the result
-	next     atomic.Pointer[[]func(context.Context)] // Continuation functions
+	state    int32                 // This indicates whether the task is started or not
+	duration int64                 // The duration of the task, in nanoseconds
+	wg       sync.WaitGroup        // Used to wait for completion instead of channel
+	action   Work[T]               // The work to do
+	outcome  outcome[T]            // This is used to store the result
+	chain    atomic.Pointer[chain] // Continuation functions
 }
 
 // Awaiter is an interface that can be used to wait for a task to complete.
@@ -170,7 +170,7 @@ func (t *task[T]) run(ctx context.Context) {
 		t.outcome = outcome[T]{result: r, err: e}
 
 		// Run next tasks with the same context
-		if cont := t.next.Load(); cont != nil {
+		if cont := t.chain.Load(); cont != nil {
 			for _, next := range *cont {
 				next(ctx)
 			}
@@ -256,6 +256,8 @@ func Failed[T any](err error) Task[T] {
 
 // -------------------------------- Continuation Task --------------------------------
 
+type chain = []func(context.Context)
+
 // After creates a continuation task that automatically runs when the predecessor completes
 func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, error)) Task[U] {
 	prev, ok := predecessor.(*task[T])
@@ -276,9 +278,9 @@ func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, erro
 
 	// Add continuation function using atomic operations
 	for {
-		curr := prev.next.Load()
+		curr := prev.chain.Load()
 		cont := withNext(curr, next.run)
-		if prev.next.CompareAndSwap(curr, &cont) {
+		if prev.chain.CompareAndSwap(curr, &cont) {
 			break
 		}
 	}
@@ -286,9 +288,9 @@ func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, erro
 }
 
 // withNext adds a new continuation function to the list of continuations
-func withNext(current *[]func(context.Context), next func(context.Context)) []func(context.Context) {
+func withNext(current *chain, next func(context.Context)) chain {
 	if current == nil {
-		return []func(context.Context){next}
+		return chain{next}
 	}
 
 	return append((*current), next)
