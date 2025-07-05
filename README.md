@@ -48,10 +48,11 @@ fmt.Printf("Duration: %v\n", task.Duration())
 
 The library supports several common concurrency patterns out of the box:
 
-- **Worker Pools**](#worker-pools)** - Controlled concurrency with `Consume` and `InvokeAll`
+- **Worker Pools** - Controlled concurrency with `Consume` and `InvokeAll`
 - **Fork/Join** - Parallel task execution with result aggregation  
 - **Throttling** - Rate limiting with `Consume` and custom concurrency
 - **Repeating** - Periodic execution with `Repeat`
+- **Task Chaining** - Sequential execution with `After` for processing pipelines
 
 
 
@@ -185,6 +186,36 @@ heartbeat := async.Repeat(context.Background(), 30*time.Second,
 time.Sleep(5 * time.Minute)
 heartbeat.Cancel()
 ```
+
+## Task Chaining
+
+Task chaining enables sequential execution of dependent operations where the output of one task becomes the input of the next. This pattern is essential for creating processing pipelines, implementing workflows, or building reactive systems where operations must happen in a specific order. The `After` function provides a clean, functional approach to task composition with automatic execution and result propagation.
+
+```go
+// Create a processing pipeline
+task1 := async.NewTask(func(ctx context.Context) (string, error) {
+    // Fetch raw data
+    return "raw data", nil
+})
+
+task2 := async.After(task1, func(ctx context.Context, data string) (string, error) {
+    // Process the raw data
+    return "processed: " + data, nil
+})
+
+task3 := async.After(task2, func(ctx context.Context, processed string) (string, error) {
+    // Final transformation
+    return "final: " + processed, nil
+})
+
+// Start the chain by running the first task
+task1.Run(context.Background())
+
+// Get the final result
+result, err := task3.Outcome()
+// result will be "final: processed: raw data"
+```
+
 
 ## Benchmarks
 

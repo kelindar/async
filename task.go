@@ -41,13 +41,14 @@ type outcome[T any] struct {
 	err    error // The error
 }
 
-// Task represents a unit of work to be done
+// task represents a unit of work to be done
 type task[T any] struct {
-	state    int32          // This indicates whether the task is started or not
-	duration int64          // The duration of the task, in nanoseconds
-	wg       sync.WaitGroup // Used to wait for completion instead of channel
-	action   Work[T]        // The work to do
-	outcome  outcome[T]     // This is used to store the result
+	state    int32                 // This indicates whether the task is started or not
+	duration int64                 // The duration of the task, in nanoseconds
+	wg       sync.WaitGroup        // Used to wait for completion instead of channel
+	action   Work[T]               // The work to do
+	outcome  outcome[T]            // This is used to store the result
+	chain    atomic.Pointer[chain] // Continuation functions
 }
 
 // Awaiter is an interface that can be used to wait for a task to complete.
@@ -70,7 +71,7 @@ func NewTask[T any](action Work[T]) Task[T] {
 	t := &task[T]{
 		action: action,
 	}
-	t.wg.Add(1) // Will be Done() when task completes
+	t.wg.Add(1)
 	return t
 }
 
@@ -164,8 +165,16 @@ func (t *task[T]) run(ctx context.Context) {
 			}
 		}()
 
+		// Execute the task
 		r, e := t.action(ctx)
 		t.outcome = outcome[T]{result: r, err: e}
+
+		// Run next tasks with the same context
+		if cont := t.chain.Load(); cont != nil {
+			for _, next := range *cont {
+				next(ctx)
+			}
+		}
 	}()
 
 	atomic.StoreInt64(&t.duration, now().UnixNano()-startedAt)
@@ -243,4 +252,46 @@ func Completed[T any](result T) Task[T] {
 // Failed creates a failed task with the given error.
 func Failed[T any](err error) Task[T] {
 	return &completedTask[T]{err: err}
+}
+
+// -------------------------------- Continuation Task --------------------------------
+
+type chain = []func(context.Context)
+
+// After creates a continuation task that automatically runs when the predecessor completes
+func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, error)) Task[U] {
+	prev, ok := predecessor.(*task[T])
+	if !ok {
+		return Failed[U](fmt.Errorf("predecessor does not support chaining"))
+	}
+
+	// Since this function is only called after predecessor completes,
+	// we can directly access its outcome without waiting
+	next := NewTask(func(ctx context.Context) (U, error) {
+		if prev.outcome.err != nil {
+			var zero U
+			return zero, prev.outcome.err
+		}
+
+		return work(ctx, prev.outcome.result) //nolint:scopelint
+	}).(*task[U])
+
+	// Add continuation function using atomic operations
+	for {
+		curr := prev.chain.Load()
+		cont := withNext(curr, next.run)
+		if prev.chain.CompareAndSwap(curr, &cont) {
+			break
+		}
+	}
+	return next
+}
+
+// withNext adds a new continuation function to the list of continuations
+func withNext(current *chain, next func(context.Context)) chain {
+	if current == nil {
+		return chain{next}
+	}
+
+	return append((*current), next)
 }
