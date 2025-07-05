@@ -11,15 +11,11 @@ import (
 
 /*
 cpu: 13th Gen Intel(R) Core(TM) i7-13700K
-BenchmarkTask/Consume-24         	    1125	    974459 ns/op	 1122649 B/op	   16025 allocs/op
-BenchmarkTask/Invoke-24          	 1000000	      1105 ns/op	     528 B/op	       7 allocs/op
-BenchmarkTask/InvokeAll-24       	    1298	    938814 ns/op	 1114347 B/op	   16023 allocs/op
-
-BenchmarkTask/Consume-24         	    4054	    309833 ns/op	  145127 B/op	    2014 allocs/op
-BenchmarkTask/Invoke-24          	 2361956	       507.6 ns/op	     128 B/op	       2 allocs/op
-BenchmarkTask/InvokeAll-24       	    4262	    303242 ns/op	  161449 B/op	    2015 allocs/op
-BenchmarkTask/Completed-24       	89886966	        13.36 ns/op	      32 B/op	       1 allocs/op
-BenchmarkTask/Errored-24         	89026714	        13.50 ns/op	      32 B/op	       1 allocs/op
+BenchmarkTask/Consume-24         	    3796	    318294 ns/op	  145122 B/op	    2014 allocs/op
+BenchmarkTask/Invoke-24          	 2116862	       570.9 ns/op	     128 B/op	       2 allocs/op
+BenchmarkTask/InvokeAll-24       	    3760	    336794 ns/op	  161456 B/op	    2015 allocs/op
+BenchmarkTask/Completed-24       	86476514	        13.87 ns/op	      32 B/op	       1 allocs/op
+BenchmarkTask/Errored-24         	86474020	        14.00 ns/op	      32 B/op	       1 allocs/op
 */
 func BenchmarkTask(b *testing.B) {
 	b.Run("Consume", func(b *testing.B) {

@@ -43,13 +43,12 @@ type outcome[T any] struct {
 
 // task represents a unit of work to be done
 type task[T any] struct {
-	state    int32          // This indicates whether the task is started or not
-	duration int64          // The duration of the task, in nanoseconds
-	wg       sync.WaitGroup // Used to wait for completion instead of channel
-	action   Work[T]        // The work to do
-	outcome  outcome[T]     // This is used to store the result
-	mu       sync.Mutex     // Used to protect the next slice
-	next     []func(context.Context)
+	state    int32                                   // This indicates whether the task is started or not
+	duration int64                                   // The duration of the task, in nanoseconds
+	wg       sync.WaitGroup                          // Used to wait for completion instead of channel
+	action   Work[T]                                 // The work to do
+	outcome  outcome[T]                              // This is used to store the result
+	next     atomic.Pointer[[]func(context.Context)] // Continuation functions
 }
 
 // Awaiter is an interface that can be used to wait for a task to complete.
@@ -171,11 +170,11 @@ func (t *task[T]) run(ctx context.Context) {
 		t.outcome = outcome[T]{result: r, err: e}
 
 		// Run next tasks with the same context
-		t.mu.Lock()
-		for _, next := range t.next {
-			next(ctx)
+		if cont := t.next.Load(); cont != nil {
+			for _, next := range *cont {
+				next(ctx)
+			}
 		}
-		t.mu.Unlock()
 	}()
 
 	atomic.StoreInt64(&t.duration, now().UnixNano()-startedAt)
@@ -275,9 +274,22 @@ func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, erro
 		return work(ctx, prev.outcome.result) //nolint:scopelint
 	}).(*task[U])
 
-	//
-	prev.mu.Lock()
-	prev.next = append(prev.next, next.run)
-	prev.mu.Unlock()
+	// Add continuation function using atomic operations
+	for {
+		curr := prev.next.Load()
+		cont := withNext(curr, next.run)
+		if prev.next.CompareAndSwap(curr, &cont) {
+			break
+		}
+	}
 	return next
+}
+
+// withNext adds a new continuation function to the list of continuations
+func withNext(current *[]func(context.Context), next func(context.Context)) []func(context.Context) {
+	if current == nil {
+		return []func(context.Context){next}
+	}
+
+	return append((*current), next)
 }
