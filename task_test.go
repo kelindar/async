@@ -318,3 +318,148 @@ func TestWait(t *testing.T) {
 	assert.Error(t, task.Wait())
 	assert.Error(t, task.Wait())
 }
+
+func TestAfterBasicChaining(t *testing.T) {
+	result1 := "first task"
+	result2 := "second task"
+
+	// Create first task
+	task1 := NewTask(func(ctx context.Context) (string, error) {
+		time.Sleep(time.Millisecond * 10)
+		return result1, nil
+	})
+
+	// Chain second task after first
+	task2 := After(task1, func(ctx context.Context, result1 string) (any, error) {
+		time.Sleep(time.Millisecond * 10)
+		return result2, nil
+	})
+
+	// Start the first task (this will trigger the chain)
+	task1.Run(context.Background())
+
+	// Verify both tasks completed
+	firstResult, err1 := task1.Outcome()
+	assert.NoError(t, err1)
+	assert.Equal(t, result1, firstResult)
+
+	secondResult, err2 := task2.Outcome()
+	assert.NoError(t, err2)
+	assert.Equal(t, result2, secondResult)
+
+	// Verify both tasks have durations
+	assert.True(t, task1.Duration() > 0)
+	assert.True(t, task2.Duration() > 0)
+}
+
+func TestAfterWithError(t *testing.T) {
+	expectedError := errors.New("first task failed")
+
+	// Create first task that fails
+	task1 := NewTask(func(ctx context.Context) (string, error) {
+		return "", expectedError
+	})
+
+	// Chain second task after first (should still run)
+	task2 := After(task1, func(ctx context.Context, result1 string) (any, error) {
+		return "second task succeeded", nil
+	})
+
+	// Start the first task
+	task1.Run(context.Background())
+
+	// Verify first task failed
+	_, err1 := task1.Outcome()
+	assert.Error(t, err1)
+	assert.Equal(t, expectedError, err1)
+
+	// Verify second task is showing the same error
+	_, err2 := task2.Outcome()
+	assert.Error(t, err2)
+	assert.Equal(t, expectedError, err2)
+}
+
+func TestAfterMultipleChaining(t *testing.T) {
+	// Create a chain of tasks
+	task1 := NewTask(func(ctx context.Context) (string, error) {
+		return "task1", nil
+	})
+
+	task2 := After(task1, func(ctx context.Context, result1 string) (any, error) {
+		return "task2", nil
+	})
+
+	task3 := After(task2, func(ctx context.Context, result2 any) (any, error) {
+		return "task3", nil
+	})
+
+	// Start the first task (this will trigger the entire chain)
+	task1.Run(context.Background())
+
+	// Verify all tasks completed
+	result1, err1 := task1.Outcome()
+	assert.NoError(t, err1)
+	assert.Equal(t, "task1", result1)
+
+	result2, err2 := task2.Outcome()
+	assert.NoError(t, err2)
+	assert.Equal(t, "task2", result2)
+
+	result3, err3 := task3.Outcome()
+	assert.NoError(t, err3)
+	assert.Equal(t, "task3", result3)
+}
+
+func TestAfterWithCancellation(t *testing.T) {
+	task1 := NewTask(func(ctx context.Context) (string, error) {
+		time.Sleep(time.Millisecond * 10)
+		return "task1", nil
+	})
+
+	task2 := After(task1, func(ctx context.Context, result1 string) (any, error) {
+		time.Sleep(time.Millisecond * 50)
+		return "task2", nil
+	})
+
+	// Start the first task
+	task1.Run(context.Background())
+
+	// Cancel the continuation task while it's running
+	time.Sleep(time.Millisecond * 15) // Let first task complete
+	task2.Cancel()
+
+	// Verify first task completed
+	result1, err1 := task1.Outcome()
+	assert.NoError(t, err1)
+	assert.Equal(t, "task1", result1)
+
+	// Verify second task was cancelled
+	_, err2 := task2.Outcome()
+	assert.Error(t, err2)
+	assert.Equal(t, errCancelled, err2)
+}
+
+func TestAfterWithCompletedTask(t *testing.T) {
+	// Create a completed task
+	task1 := Completed("completed result")
+
+	// Chain after it
+	task2 := After(task1, func(ctx context.Context, result1 string) (any, error) {
+		return "continuation", nil
+	})
+
+	// Verify results
+	result1, err1 := task1.Outcome()
+	assert.NoError(t, err1)
+	assert.Equal(t, "completed result", result1)
+
+	result2, err2 := task2.Outcome()
+	if err2 != nil {
+		// If chaining is not supported, should return an error
+		assert.Error(t, err2)
+		assert.Contains(t, err2.Error(), "predecessor does not support chaining")
+	} else {
+		// If chaining is supported, should work
+		assert.Equal(t, "continuation", result2)
+	}
+}
