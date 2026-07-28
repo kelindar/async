@@ -89,20 +89,6 @@ func main() {
 			return taskCount
 		})
 
-		b.RunN("pulse-signal", func(int) int {
-			block := make(chan struct{})
-			p := async.Pulse(ctx, 0, func(context.Context) {
-				<-block
-			})
-			p.Pulse() // park worker so later pulses only hit the coalesce path
-			for range taskCount {
-				p.Pulse()
-			}
-			close(block)
-			p.Cancel()
-			_ = p.Wait()
-			return taskCount
-		})
 	}, bench.WithSamples(25), bench.WithDuration(20*time.Millisecond), bench.WithThreshold(20))
 }
 
