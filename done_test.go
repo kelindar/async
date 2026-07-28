@@ -19,6 +19,7 @@ func TestDone(t *testing.T) {
 		return "done", nil
 	})
 	done := Done(task)
+	assert.Equal(t, done, Done(task))
 
 	select {
 	case <-done:
@@ -36,6 +37,32 @@ func TestDone(t *testing.T) {
 	result, err := task.Outcome()
 	assert.NoError(t, err)
 	assert.Equal(t, "done", result)
+}
+
+func TestDoneAfterCompletion(t *testing.T) {
+	task := Invoke(context.Background(), func(context.Context) (string, error) {
+		return "done", nil
+	})
+	assert.NoError(t, task.Wait())
+
+	select {
+	case <-Done(task):
+	default:
+		t.Fatal("done was not closed for completed task")
+	}
+}
+
+func TestDonePanic(t *testing.T) {
+	task := Invoke(context.Background(), func(context.Context) (string, error) {
+		panic("failed")
+	})
+
+	select {
+	case <-Done(task):
+	case <-time.After(time.Second):
+		t.Fatal("done did not close after panic")
+	}
+	assert.ErrorIs(t, task.Wait(), ErrPanic)
 }
 
 func TestDonePreservesError(t *testing.T) {
@@ -70,3 +97,15 @@ func TestDoneNil(t *testing.T) {
 		Done(nil)
 	})
 }
+
+func TestDoneUnsupported(t *testing.T) {
+	assert.PanicsWithValue(t, "async: awaiter does not support selectable completion", func() {
+		Done(unsupportedAwaiter{})
+	})
+}
+
+type unsupportedAwaiter struct{}
+
+func (unsupportedAwaiter) Wait() error  { return nil }
+func (unsupportedAwaiter) Cancel()      {}
+func (unsupportedAwaiter) State() State { return IsCreated }

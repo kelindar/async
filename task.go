@@ -119,7 +119,7 @@ func (t *task[T]) Cancel() {
 	case t.changeState(IsCreated, IsCancelled):
 		var zero T
 		t.outcome = outcome[T]{result: zero, err: errCancelled}
-		t.wg.Done()
+		t.finish(context.Background())
 		return
 	case t.changeState(IsRunning, IsCancelled):
 		// already running, do nothing
@@ -133,7 +133,7 @@ func (t *task[T]) run(ctx context.Context) {
 	}
 
 	// Notify everyone of the completion/error state
-	defer t.wg.Done()
+	defer t.finish(ctx)
 
 	// Check for cancellation before starting work
 	if t.State() == IsCancelled {
@@ -169,12 +169,6 @@ func (t *task[T]) run(ctx context.Context) {
 		r, e := t.action(ctx)
 		t.outcome = outcome[T]{result: r, err: e}
 
-		// Run next tasks with the same context
-		if cont := t.chain.Load(); cont != nil {
-			for _, next := range *cont {
-				next(ctx)
-			}
-		}
 	}()
 
 	atomic.StoreInt64(&t.duration, now().UnixNano()-startedAt)
@@ -199,6 +193,45 @@ func (t *task[T]) run(ctx context.Context) {
 // Cancel cancels a running task.
 func (t *task[T]) changeState(from, to State) bool {
 	return atomic.CompareAndSwapInt32(&t.state, int32(from), int32(to))
+}
+
+// finish publishes completion before running continuations.
+func (t *task[T]) finish(ctx context.Context) {
+	cont := t.chain.Swap(finishedChain)
+	t.wg.Done()
+
+	if cont == nil || cont == finishedChain {
+		return
+	}
+	if cont.done != nil {
+		close(cont.done)
+	}
+	for _, next := range cont.next {
+		next(ctx)
+	}
+}
+
+// done returns the task's shared completion channel.
+func (t *task[T]) done() <-chan struct{} {
+	var done chan struct{}
+	for {
+		curr := t.chain.Load()
+		if curr == finishedChain {
+			t.wg.Wait()
+			return closedDone
+		}
+		if curr != nil && curr.done != nil {
+			return curr.done
+		}
+		if done == nil {
+			done = make(chan struct{})
+		}
+
+		next := withDone(curr, done)
+		if t.chain.CompareAndSwap(curr, &next) {
+			return done
+		}
+	}
 }
 
 // Invoke creates a new tasks and runs it asynchronously.
@@ -237,6 +270,10 @@ func (t *completedTask[T]) Wait() error {
 	return t.err
 }
 
+func (t *completedTask[T]) done() <-chan struct{} {
+	return closedDone
+}
+
 // Duration returns zero since no work was performed
 func (t *completedTask[T]) Duration() time.Duration {
 	return 0
@@ -256,7 +293,12 @@ func Failed[T any](err error) Task[T] {
 
 // -------------------------------- Continuation Task --------------------------------
 
-type chain = []func(context.Context)
+type chain struct {
+	next []func(context.Context)
+	done chan struct{}
+}
+
+var finishedChain = &chain{}
 
 // After creates a continuation task that automatically runs when the predecessor completes
 func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, error)) Task[U] {
@@ -279,6 +321,9 @@ func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, erro
 	// Add continuation function using atomic operations
 	for {
 		curr := prev.chain.Load()
+		if curr == finishedChain {
+			return Failed[U](fmt.Errorf("predecessor already completed"))
+		}
 		cont := withNext(curr, next.run)
 		if prev.chain.CompareAndSwap(curr, &cont) {
 			break
@@ -290,8 +335,24 @@ func After[T, U any](predecessor Task[T], work func(context.Context, T) (U, erro
 // withNext adds a new continuation function to the list of continuations
 func withNext(current *chain, next func(context.Context)) chain {
 	if current == nil {
-		return chain{next}
+		return chain{next: []func(context.Context){next}}
 	}
 
-	return append((*current), next)
+	updated := chain{
+		next: make([]func(context.Context), len(current.next)+1),
+		done: current.done,
+	}
+	copy(updated.next, current.next)
+	updated.next[len(current.next)] = next
+	return updated
+}
+
+func withDone(current *chain, done chan struct{}) chain {
+	if current == nil {
+		return chain{done: done}
+	}
+	return chain{
+		next: current.next,
+		done: done,
+	}
 }

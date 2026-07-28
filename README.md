@@ -59,9 +59,9 @@ case <-ctx.Done():
 }
 ```
 
-`Done` starts one waiter goroutine. Call it once per awaiter and retain the
-returned channel. It leaves `Awaiter` unchanged, so existing implementations
-remain compatible and ordinary tasks keep their current allocation cost.
+`Done` reuses the task's completion chain and does not start a waiter goroutine.
+Repeated calls before completion return the same channel. It supports tasks
+created by this package while leaving `Awaiter` unchanged.
 
 The library supports several common concurrency patterns out of the box:
 

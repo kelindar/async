@@ -3,19 +3,27 @@
 
 package async
 
+var closedDone = func() <-chan struct{} {
+	done := make(chan struct{})
+	close(done)
+	return done
+}()
+
+type doneAwaiter interface {
+	done() <-chan struct{}
+}
+
 // Done returns a channel that is closed when the awaiter completes.
 //
-// Done starts one waiter goroutine. Call it once per awaiter and retain the
-// returned channel. Use Wait or Outcome after the channel closes to read the
-// completion error or typed result.
+// Done supports tasks created by this package and does not start a waiter
+// goroutine. Repeated calls before completion return the same channel.
 func Done(awaiter Awaiter) <-chan struct{} {
 	if awaiter == nil {
 		panic("async: nil awaiter")
 	}
-	done := make(chan struct{})
-	go func() {
-		_ = awaiter.Wait()
-		close(done)
-	}()
-	return done
+	task, ok := awaiter.(doneAwaiter)
+	if !ok {
+		panic("async: awaiter does not support selectable completion")
+	}
+	return task.done()
 }
