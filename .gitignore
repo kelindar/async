@@ -3,3 +3,4 @@ vendor
 *.prof
 *.test
 coverage.*
+*.gob
