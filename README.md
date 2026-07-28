@@ -70,6 +70,7 @@ The library supports several common concurrency patterns out of the box:
 - **Fork/Join** - Parallel task execution with result aggregation  
 - **Throttling** - Rate limiting with `Consume` and custom concurrency
 - **Repeating** - Periodic execution with `Repeat`
+- **Pulsing** - Coalescing on-demand execution with `Pulse`
 - **Task Chaining** - Sequential execution with `After` for processing pipelines
 
 
@@ -194,15 +195,29 @@ Repeating tasks enable periodic execution of operations at regular intervals. Th
 
 ```go
 // Heartbeat every 30 seconds
-heartbeat := async.Repeat(context.Background(), 30*time.Second, 
-    func(ctx context.Context) (string, error) {
-        // Send heartbeat (placeholder function)
-        return "heartbeat sent", nil
+heartbeat := async.Repeat(context.Background(), 30*time.Second,
+    func(ctx context.Context) {
+        // Send heartbeat
     })
 
 // Stop after 5 minutes
 time.Sleep(5 * time.Minute)
 heartbeat.Cancel()
+```
+
+## Pulsed Tasks
+
+Pulsed tasks run when signaled, coalescing overlapping wakes into one pending run. An optional interval also wakes the worker for periodic repair.
+
+```go
+reconcile := async.Pulse(context.Background(), 30*time.Second,
+    func(ctx context.Context) {
+        // Reconcile state; handle errors inside
+    })
+
+reconcile.Pulse() // wake now (coalescing)
+reconcile.Cancel()
+_ = reconcile.Wait()
 ```
 
 ## Task Chaining

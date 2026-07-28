@@ -23,7 +23,7 @@ func main() {
 	bench.Run(func(b *bench.B) {
 		b.RunN("consume", func(int) int {
 			tasks := make(chan async.Task[any], taskCount)
-			for i := 0; i < taskCount; i++ {
+			for range taskCount {
 				tasks <- async.NewTask(noop)
 			}
 			close(tasks)
@@ -32,7 +32,7 @@ func main() {
 		})
 
 		b.RunN("invoke", func(int) int {
-			for i := 0; i < taskCount; i++ {
+			for range taskCount {
 				_, _ = async.Invoke(ctx, noop).Outcome()
 			}
 			return taskCount
@@ -40,7 +40,7 @@ func main() {
 
 		b.RunN("all", func(int) int {
 			tasks := make([]async.Task[any], 0, taskCount)
-			for i := 0; i < taskCount; i++ {
+			for range taskCount {
 				tasks = append(tasks, async.NewTask(noop))
 			}
 			_ = async.InvokeAll(ctx, concurrency, tasks).Wait()
@@ -48,7 +48,7 @@ func main() {
 		})
 
 		b.RunN("done", func(int) int {
-			for i := 0; i < taskCount; i++ {
+			for range taskCount {
 				task := async.NewTask(noop)
 				done := async.Done(task)
 				task.Run(ctx)
@@ -58,7 +58,7 @@ func main() {
 		})
 
 		b.RunN("completed", func(int) int {
-			for i := 0; i < taskCount; i++ {
+			for range taskCount {
 				_, _ = async.Completed[any](nil).Outcome()
 			}
 			return taskCount
@@ -66,9 +66,41 @@ func main() {
 
 		err := errors.New("test error")
 		b.RunN("fail", func(int) int {
-			for i := 0; i < taskCount; i++ {
+			for range taskCount {
 				_, _ = async.Failed[any](err).Outcome()
 			}
+			return taskCount
+		})
+
+		b.RunN("pulse", func(int) int {
+			ran := make(chan struct{}, 1)
+			p := async.Pulse(ctx, 0, func(context.Context) {
+				select {
+				case ran <- struct{}{}:
+				default:
+				}
+			})
+			for range taskCount {
+				p.Pulse()
+				<-ran
+			}
+			p.Cancel()
+			_ = p.Wait()
+			return taskCount
+		})
+
+		b.RunN("pulse-signal", func(int) int {
+			block := make(chan struct{})
+			p := async.Pulse(ctx, 0, func(context.Context) {
+				<-block
+			})
+			p.Pulse() // park worker so later pulses only hit the coalesce path
+			for range taskCount {
+				p.Pulse()
+			}
+			close(block)
+			p.Cancel()
+			_ = p.Wait()
 			return taskCount
 		})
 	}, bench.WithSamples(25), bench.WithDuration(20*time.Millisecond), bench.WithThreshold(20))
