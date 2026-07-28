@@ -324,6 +324,9 @@ func TestPulse(t *testing.T) {
 
 	t.Run("done closes on cancel", func(t *testing.T) {
 		p := Pulse(context.Background(), 0, func(context.Context) {})
+		require.Eventually(t, func() bool {
+			return p.State() == IsRunning
+		}, time.Second, time.Millisecond)
 		done := Done(p)
 		select {
 		case <-done:
@@ -337,6 +340,7 @@ func TestPulse(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("done did not close after cancel")
 		}
+		assert.True(t, p.State() == IsCompleted || p.State() == IsCancelled)
 	})
 }
 
