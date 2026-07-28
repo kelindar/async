@@ -35,7 +35,7 @@ func TestInvokeAll(t *testing.T) {
 	assert.Equal(t, []int{0, 0, 1, 1, 2, 2}, res)
 }
 
-func TestInvokeAllWithZeroConcurrency(t *testing.T) {
+func TestInvokeAllZero(t *testing.T) {
 	resChan := make(chan int, 6)
 	works := make([]Work[any], 6)
 	for i := range works {

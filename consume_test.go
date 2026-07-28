@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestProcessTaskPool_HappyPath(t *testing.T) {
+func TestProcessHappy(t *testing.T) {
 	tests := []struct {
 		desc        string
 		taskCount   int
@@ -69,7 +69,7 @@ func TestProcessTaskPool_HappyPath(t *testing.T) {
 }
 
 // test context cancellation
-func TestProcessTaskPool_SadPath(t *testing.T) {
+func TestProcessError(t *testing.T) {
 	tests := []struct {
 		desc        string
 		taskCount   int

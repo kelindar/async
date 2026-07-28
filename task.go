@@ -216,18 +216,21 @@ func (t *task[T]) done() <-chan struct{} {
 	var done chan struct{}
 	for {
 		curr := t.chain.Load()
-		if curr == finishedChain {
+		switch {
+		case curr == finishedChain:
 			t.wg.Wait()
 			return closedDone
-		}
-		if curr != nil && curr.done != nil {
+		case curr != nil && curr.done != nil:
 			return curr.done
 		}
 		if done == nil {
 			done = make(chan struct{})
 		}
 
-		next := withDone(curr, done)
+		next := chain{done: done}
+		if curr != nil {
+			next.next = curr.next
+		}
 		if t.chain.CompareAndSwap(curr, &next) {
 			return done
 		}
@@ -345,14 +348,4 @@ func withNext(current *chain, next func(context.Context)) chain {
 	copy(updated.next, current.next)
 	updated.next[len(current.next)] = next
 	return updated
-}
-
-func withDone(current *chain, done chan struct{}) chain {
-	if current == nil {
-		return chain{done: done}
-	}
-	return chain{
-		next: current.next,
-		done: done,
-	}
 }

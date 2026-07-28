@@ -261,8 +261,7 @@ func TestCompletedTaskCancel(t *testing.T) {
 	assert.Equal(t, "test error", err2.Error())
 }
 
-// TestTaskCancelledBeforeExecution tests cancelling a task before it starts executing
-func TestTaskCancelledBeforeExecution(t *testing.T) {
+func TestCancelBeforeRun(t *testing.T) {
 	task := NewTask(func(ctx context.Context) (string, error) {
 		return "should not execute", nil
 	})
@@ -280,8 +279,7 @@ func TestTaskCancelledBeforeExecution(t *testing.T) {
 	assert.Equal(t, IsCancelled, task.State())
 }
 
-// TestTaskContextCancelledDuringExecution tests context cancellation while task is executing
-func TestTaskContextCancelledDuringExecution(t *testing.T) {
+func TestCancelDuringRun(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	started := make(chan struct{})
@@ -439,7 +437,7 @@ func TestAfterWithCancellation(t *testing.T) {
 	assert.Equal(t, errCancelled, err2)
 }
 
-func TestAfterWithCompletedTask(t *testing.T) {
+func TestAfterCompleted(t *testing.T) {
 	// Create a completed task
 	task1 := Completed("completed result")
 
