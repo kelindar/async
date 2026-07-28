@@ -99,15 +99,54 @@ func TestDone(t *testing.T) {
 		})
 	})
 
-	t.Run("unsupported", func(t *testing.T) {
-		assert.PanicsWithValue(t, "async: awaiter does not support selectable completion", func() {
-			Done(unsupportedAwaiter{})
+	t.Run("custom selectable", func(t *testing.T) {
+		done := make(chan struct{})
+		close(done)
+		assert.Equal(t, (<-chan struct{})(done), Done(selectableAwaiter{done: done}))
+	})
+
+	t.Run("wait publishes completion", func(t *testing.T) {
+		task := Invoke(context.Background(), func(context.Context) (string, error) {
+			return "done", nil
 		})
+		done := Done(task)
+		assert.NoError(t, task.Wait())
+
+		select {
+		case <-done:
+		default:
+			t.Fatal("done remained open after Wait")
+		}
+	})
+
+	t.Run("with continuation", func(t *testing.T) {
+		task := NewTask(func(context.Context) (string, error) {
+			return "root", nil
+		})
+		cont := After(task, func(context.Context, string) (string, error) {
+			return "next", nil
+		})
+
+		done := Done(task)
+		task.Run(context.Background())
+
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("done did not close with continuation registered")
+		}
+
+		result, err := cont.Outcome()
+		assert.NoError(t, err)
+		assert.Equal(t, "next", result)
 	})
 }
 
-type unsupportedAwaiter struct{}
+type selectableAwaiter struct {
+	done <-chan struct{}
+}
 
-func (unsupportedAwaiter) Wait() error  { return nil }
-func (unsupportedAwaiter) Cancel()      {}
-func (unsupportedAwaiter) State() State { return IsCreated }
+func (s selectableAwaiter) Done() <-chan struct{} { return s.done }
+func (selectableAwaiter) Wait() error             { return nil }
+func (selectableAwaiter) Cancel()                 {}
+func (selectableAwaiter) State() State            { return IsCompleted }

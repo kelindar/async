@@ -60,8 +60,9 @@ case <-ctx.Done():
 ```
 
 `Done` reuses the task's completion chain and does not start a waiter goroutine.
-Repeated calls before completion return the same channel. It supports tasks
-created by this package while leaving `Awaiter` unchanged.
+Repeated calls before completion return the same channel. External awaiters can
+support it by implementing `Done() <-chan struct{}` without changing the
+`Awaiter` interface.
 
 The library supports several common concurrency patterns out of the box:
 

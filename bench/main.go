@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	taskCount   = 100
+	taskCount   = 1000
 	concurrency = 8
 )
 
@@ -49,6 +49,16 @@ func main() {
 
 		b.RunN("done", func(int) int {
 			for i := 0; i < taskCount; i++ {
+				task := async.NewTask(noop)
+				done := async.Done(task)
+				task.Run(ctx)
+				<-done
+			}
+			return taskCount
+		})
+
+		b.RunN("completed", func(int) int {
+			for i := 0; i < taskCount; i++ {
 				_, _ = async.Completed[any](nil).Outcome()
 			}
 			return taskCount
@@ -61,7 +71,7 @@ func main() {
 			}
 			return taskCount
 		})
-	}, bench.WithSamples(50), bench.WithDuration(20*time.Millisecond), bench.WithThreshold(20))
+	}, bench.WithSamples(25), bench.WithDuration(20*time.Millisecond), bench.WithThreshold(20))
 }
 
 func noop(context.Context) (any, error) {

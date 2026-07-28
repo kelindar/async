@@ -396,4 +396,69 @@ func TestAfter(t *testing.T) {
 			assert.Equal(t, "continuation", result2)
 		}
 	})
+
+	t.Run("already finished", func(t *testing.T) {
+		task1 := Invoke(context.Background(), func(context.Context) (string, error) {
+			return "done", nil
+		})
+		assert.NoError(t, task1.Wait())
+
+		task2 := After(task1, func(context.Context, string) (string, error) {
+			return "continuation", nil
+		})
+		_, err := task2.Outcome()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "predecessor already completed")
+	})
+
+	t.Run("fan-out", func(t *testing.T) {
+		task1 := NewTask(func(context.Context) (string, error) {
+			return "root", nil
+		})
+
+		task2 := After(task1, func(context.Context, string) (string, error) {
+			return "left", nil
+		})
+		task3 := After(task1, func(context.Context, string) (string, error) {
+			return "right", nil
+		})
+
+		task1.Run(context.Background())
+
+		result2, err2 := task2.Outcome()
+		assert.NoError(t, err2)
+		assert.Equal(t, "left", result2)
+
+		result3, err3 := task3.Outcome()
+		assert.NoError(t, err3)
+		assert.Equal(t, "right", result3)
+	})
+
+	t.Run("wait includes continuation", func(t *testing.T) {
+		release := make(chan struct{})
+		task1 := NewTask(func(context.Context) (string, error) {
+			return "root", nil
+		})
+		task2 := After(task1, func(context.Context, string) (string, error) {
+			<-release
+			return "next", nil
+		})
+
+		task1.Run(context.Background())
+		waited := make(chan struct{})
+		go func() {
+			_ = task1.Wait()
+			close(waited)
+		}()
+
+		select {
+		case <-waited:
+			t.Fatal("Wait returned before the continuation")
+		case <-time.After(20 * time.Millisecond):
+		}
+
+		close(release)
+		assert.NoError(t, task2.Wait())
+		assert.NoError(t, task1.Wait())
+	})
 }

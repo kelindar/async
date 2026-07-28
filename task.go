@@ -96,6 +96,32 @@ func (t *task[T]) Wait() error {
 	return t.outcome.err
 }
 
+// Done returns a channel that is closed when the task completes.
+func (t *task[T]) Done() <-chan struct{} {
+	var done chan struct{}
+	for {
+		curr := t.chain.Load()
+		switch {
+		case curr == finishedChain:
+			t.wg.Wait()
+			return closedDone
+		case curr != nil && curr.done != nil:
+			return curr.done
+		}
+		if done == nil {
+			done = make(chan struct{})
+		}
+
+		next := chain{done: done}
+		if curr != nil {
+			next.next = curr.next
+		}
+		if t.chain.CompareAndSwap(curr, &next) {
+			return done
+		}
+	}
+}
+
 // State returns the current state of the task. This operation is non-blocking.
 func (t *task[T]) State() State {
 	v := t.state.Load()
@@ -195,46 +221,18 @@ func (t *task[T]) changeState(from, to State) bool {
 	return t.state.CompareAndSwap(int32(from), int32(to))
 }
 
-// finish publishes completion before running continuations.
+// finish runs continuations before publishing completion.
 func (t *task[T]) finish(ctx context.Context) {
 	cont := t.chain.Swap(finishedChain)
+	if cont != nil && cont != finishedChain {
+		for _, next := range cont.next {
+			next(ctx)
+		}
+		if cont.done != nil {
+			close(cont.done)
+		}
+	}
 	t.wg.Done()
-
-	if cont == nil || cont == finishedChain {
-		return
-	}
-	if cont.done != nil {
-		close(cont.done)
-	}
-	for _, next := range cont.next {
-		next(ctx)
-	}
-}
-
-// done returns the task's shared completion channel.
-func (t *task[T]) done() <-chan struct{} {
-	var done chan struct{}
-	for {
-		curr := t.chain.Load()
-		switch {
-		case curr == finishedChain:
-			t.wg.Wait()
-			return closedDone
-		case curr != nil && curr.done != nil:
-			return curr.done
-		}
-		if done == nil {
-			done = make(chan struct{})
-		}
-
-		next := chain{done: done}
-		if curr != nil {
-			next.next = curr.next
-		}
-		if t.chain.CompareAndSwap(curr, &next) {
-			return done
-		}
-	}
 }
 
 // Invoke creates a new tasks and runs it asynchronously.
@@ -273,7 +271,8 @@ func (t *completedTask[T]) Wait() error {
 	return t.err
 }
 
-func (t *completedTask[T]) done() <-chan struct{} {
+// Done returns an already-closed completion channel.
+func (t *completedTask[T]) Done() <-chan struct{} {
 	return closedDone
 }
 
