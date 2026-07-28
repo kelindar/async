@@ -43,8 +43,8 @@ type outcome[T any] struct {
 
 // task represents a unit of work to be done
 type task[T any] struct {
-	state    int32                 // This indicates whether the task is started or not
-	duration int64                 // The duration of the task, in nanoseconds
+	state    atomic.Int32          // This indicates whether the task is started or not
+	duration atomic.Int64          // The duration of the task, in nanoseconds
 	wg       sync.WaitGroup        // Used to wait for completion instead of channel
 	action   Work[T]               // The work to do
 	outcome  outcome[T]            // This is used to store the result
@@ -98,13 +98,13 @@ func (t *task[T]) Wait() error {
 
 // State returns the current state of the task. This operation is non-blocking.
 func (t *task[T]) State() State {
-	v := atomic.LoadInt32(&t.state)
+	v := t.state.Load()
 	return State(v)
 }
 
 // Duration returns the duration of the task.
 func (t *task[T]) Duration() time.Duration {
-	return time.Duration(atomic.LoadInt64(&t.duration))
+	return time.Duration(t.duration.Load())
 }
 
 // Run starts the task asynchronously.
@@ -171,7 +171,7 @@ func (t *task[T]) run(ctx context.Context) {
 
 	}()
 
-	atomic.StoreInt64(&t.duration, now().UnixNano()-startedAt)
+	t.duration.Store(now().UnixNano() - startedAt)
 
 	// Check if we were cancelled during execution
 	switch {
@@ -192,7 +192,7 @@ func (t *task[T]) run(ctx context.Context) {
 
 // Cancel cancels a running task.
 func (t *task[T]) changeState(from, to State) bool {
-	return atomic.CompareAndSwapInt32(&t.state, int32(from), int32(to))
+	return t.state.CompareAndSwap(int32(from), int32(to))
 }
 
 // finish publishes completion before running continuations.

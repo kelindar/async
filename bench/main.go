@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	taskCount   = 1000
+	taskCount   = 100
 	concurrency = 8
 )
 
@@ -61,7 +61,7 @@ func main() {
 			}
 			return taskCount
 		})
-	}, bench.WithSamples(25), bench.WithDuration(20*time.Millisecond), bench.WithThreshold(20))
+	}, bench.WithSamples(50), bench.WithDuration(20*time.Millisecond), bench.WithThreshold(20))
 }
 
 func noop(context.Context) (any, error) {
