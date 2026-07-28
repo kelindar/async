@@ -16,95 +16,83 @@ import (
 )
 
 func TestRepeat(t *testing.T) {
-	assert.NotPanics(t, func() {
-		out := make(chan bool, 1)
-		task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (any, error) {
-			out <- true
-			return nil, nil
+	t.Run("fires repeatedly", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			out := make(chan bool, 1)
+			task := Repeat(context.TODO(), time.Nanosecond*10, func(context.Context) (any, error) {
+				out <- true
+				return nil, nil
+			})
+
+			<-out
+			v := <-out
+			assert.True(t, v)
+			task.Cancel()
+		})
+	})
+
+	t.Run("typed", func(t *testing.T) {
+		var counter atomic.Int64
+		task := Repeat(context.TODO(), time.Millisecond*100, func(ctx context.Context) (string, error) {
+			count := counter.Add(1)
+			return fmt.Sprintf("tick-%d", count), nil
 		})
 
-		<-out
-		v := <-out
-		assert.True(t, v)
+		time.Sleep(time.Millisecond * 150)
 		task.Cancel()
-	})
-}
 
-func TestRepeatType(t *testing.T) {
-	var counter int64
-	task := Repeat(context.TODO(), time.Millisecond*100, func(ctx context.Context) (string, error) {
-		count := atomic.AddInt64(&counter, 1)
-		return fmt.Sprintf("tick-%d", count), nil
-	})
+		intTask := Repeat(context.TODO(), time.Millisecond*50, func(ctx context.Context) (int, error) {
+			return int(time.Now().UnixNano() % 1000), nil
+		})
 
-	time.Sleep(time.Millisecond * 150)
-	task.Cancel()
-
-	// Type-safe integer timer
-	intTask := Repeat(context.TODO(), time.Millisecond*50, func(ctx context.Context) (int, error) {
-		return int(time.Now().UnixNano() % 1000), nil
+		time.Sleep(time.Millisecond * 100)
+		intTask.Cancel()
 	})
 
-	time.Sleep(time.Millisecond * 100)
-	intTask.Cancel()
-}
+	t.Run("continues on error", func(t *testing.T) {
+		var errorCount atomic.Int64
+		task := Repeat(context.TODO(), time.Millisecond*10, func(ctx context.Context) (string, error) {
+			errorCount.Add(1)
+			return "", errors.New("test error")
+		})
 
-// TestRepeatWithError tests Repeat function when action returns an error
-func TestRepeatWithError(t *testing.T) {
-	var errorCount int64
-	task := Repeat(context.TODO(), time.Millisecond*10, func(ctx context.Context) (string, error) {
-		atomic.AddInt64(&errorCount, 1)
-		return "", errors.New("test error")
+		time.Sleep(time.Millisecond * 50)
+		task.Cancel()
+
+		count := errorCount.Load()
+		assert.True(t, count > 1, "Action should have been called multiple times, got %d", count)
 	})
 
-	// Let it run a few times
-	time.Sleep(time.Millisecond * 50)
-	task.Cancel()
+	t.Run("context cancelled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
 
-	// Verify the action was called multiple times despite errors
-	count := atomic.LoadInt64(&errorCount)
-	assert.True(t, count > 1, "Action should have been called multiple times, got %d", count)
-}
+		actionCalled := false
+		task := Repeat(ctx, time.Millisecond*10, func(ctx context.Context) (string, error) {
+			actionCalled = true
+			return "should not be called", nil
+		})
 
-// TestRepeatContextCancelled tests Repeat function when context is cancelled immediately
-func TestRepeatContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Cancel context immediately
-	cancel()
-
-	actionCalled := false
-	task := Repeat(ctx, time.Millisecond*10, func(ctx context.Context) (string, error) {
-		actionCalled = true
-		return "should not be called", nil
+		err := task.Wait()
+		assert.Error(t, err)
+		assert.Equal(t, context.Canceled, err)
+		assert.False(t, actionCalled, "Action should not have been called")
 	})
 
-	// Wait for task to complete
-	err := task.Wait()
+	t.Run("timeout", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+		defer cancel()
 
-	// Task should complete with context error
-	assert.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
-	assert.False(t, actionCalled, "Action should not have been called")
-}
+		var actionCount atomic.Int64
+		task := Repeat(ctx, time.Millisecond*10, func(ctx context.Context) (string, error) {
+			count := actionCount.Add(1)
+			return fmt.Sprintf("action-%d", count), nil
+		})
 
-// TestRepeatNormalExecution tests Repeat function with normal timer execution
-func TestRepeatNormalExecution(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
-	defer cancel()
-
-	var actionCount int64
-	task := Repeat(ctx, time.Millisecond*10, func(ctx context.Context) (string, error) {
-		count := atomic.AddInt64(&actionCount, 1)
-		return fmt.Sprintf("action-%d", count), nil
+		err := task.Wait()
+		assert.Error(t, err)
+		assert.Equal(t, context.DeadlineExceeded, err)
+		count := actionCount.Load()
+		assert.True(t, count >= 2, "Action should have been called multiple times, got %d", count)
 	})
-
-	// Wait for task to complete (should timeout)
-	err := task.Wait()
-
-	// Task should complete with context timeout
-	assert.Error(t, err)
-	assert.Equal(t, context.DeadlineExceeded, err)
-	count := atomic.LoadInt64(&actionCount)
-	assert.True(t, count >= 2, "Action should have been called multiple times, got %d", count)
 }

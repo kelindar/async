@@ -46,6 +46,24 @@ fmt.Println(result) // Output: Hello, World!
 fmt.Printf("Duration: %v\n", task.Duration())
 ```
 
+Use `Done` when task completion must participate in a `select`:
+
+```go
+done := async.Done(task)
+select {
+case <-done:
+    result, err := task.Outcome()
+    // Handle result and error.
+case <-ctx.Done():
+    // Handle cancellation or continue waiting elsewhere.
+}
+```
+
+`Done` reuses the task's completion chain and does not start a waiter goroutine.
+Repeated calls before completion return the same channel. External awaiters can
+support it by implementing `Done() <-chan struct{}` without changing the
+`Awaiter` interface.
+
 The library supports several common concurrency patterns out of the box:
 
 - **Worker Pools** - Controlled concurrency with `Consume` and `InvokeAll`

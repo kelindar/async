@@ -49,6 +49,16 @@ func main() {
 
 		b.RunN("done", func(int) int {
 			for i := 0; i < taskCount; i++ {
+				task := async.NewTask(noop)
+				done := async.Done(task)
+				task.Run(ctx)
+				<-done
+			}
+			return taskCount
+		})
+
+		b.RunN("completed", func(int) int {
+			for i := 0; i < taskCount; i++ {
 				_, _ = async.Completed[any](nil).Outcome()
 			}
 			return taskCount
