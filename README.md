@@ -221,14 +221,7 @@ result, err := task3.Outcome()
 
 The benchmarks demonstrate the library's excellent performance characteristics across different usage patterns.
 
-```
-cpu: 13th Gen Intel(R) Core(TM) i7-13700K
-BenchmarkTask/Consume-24         	    4054	    309833 ns/op	  145127 B/op	    2014 allocs/op
-BenchmarkTask/Invoke-24          	 2361956	       507.6 ns/op	     128 B/op	       2 allocs/op
-BenchmarkTask/InvokeAll-24       	    4262	    303242 ns/op	  161449 B/op	    2015 allocs/op
-BenchmarkTask/Completed-24       	89886966	        13.36 ns/op	      32 B/op	       1 allocs/op
-BenchmarkTask/Errored-24         	89026714	        13.50 ns/op	      32 B/op	
-```
+Run the standalone benchmark module with `cd bench && go run .`.
 
 
 
